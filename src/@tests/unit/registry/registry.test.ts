@@ -2,6 +2,8 @@ import { assert, assertEquals, assertFalse, assertThrows } from '@std/assert'
 import { InternalError } from '@zanix/errors'
 import { SERVICE_REGISTRY_ENV, ServiceRegistry } from 'modules/registry/registry.ts'
 
+console.error = () => {}
+
 Deno.test('ServiceRegistry.get returns a registered entry', () => {
   const registry = new ServiceRegistry([
     { serviceId: 'billing', adminBaseUrl: 'http://billing.internal:30248/billing-rest' },

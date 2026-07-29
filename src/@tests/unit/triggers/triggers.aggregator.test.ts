@@ -1,5 +1,6 @@
 // deno-lint-ignore-file no-explicit-any
-import { assertEquals, assertThrows } from '@std/assert'
+import { assert, assertEquals, assertThrows } from '@std/assert'
+import { stub } from '@std/testing/mock'
 import { InternalError } from '@zanix/errors'
 import { ServiceRegistry } from 'modules/registry/registry.ts'
 import {
@@ -9,6 +10,8 @@ import {
   TriggersAggregator,
   type TriggersClientFactory,
 } from 'modules/triggers/triggers.aggregator.ts'
+
+console.error = () => {}
 
 function fakeClient(overrides: Partial<Record<string, (...args: any[]) => any>> = {}): any {
   return {
@@ -129,6 +132,41 @@ Deno.test('TriggersAggregator.get throws for an unregistered service, never call
     aggregator.get('unknown-service', 'Invoice')
   }, InternalError)
   assertEquals(called, false)
+})
+
+Deno.test({
+  name:
+    'TriggersAggregator defaults to an unauthenticated TriggersAdminClient when no factory is given',
+  fn: async () => {
+    const fetchStub = stub(
+      globalThis,
+      'fetch',
+      () =>
+        Promise.resolve(
+          new Response(JSON.stringify({ model: 'Invoice', ...TRIGGER_DEFAULTS }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        ) as never,
+    )
+
+    try {
+      const aggregator = new TriggersAggregator(registry)
+      const result = await aggregator.get('billing', 'Invoice')
+
+      assertEquals(result, { model: 'Invoice', ...TRIGGER_DEFAULTS })
+      assertEquals(fetchStub.calls.length, 1)
+      assert(String(fetchStub.calls[0].args[0]).startsWith('http://billing.internal'))
+    } finally {
+      fetchStub.restore()
+    }
+  },
+})
+
+Deno.test('getTriggersAggregator lazily builds a default instance when none was installed', () => {
+  const aggregator = getTriggersAggregator()
+
+  assert(aggregator instanceof TriggersAggregator)
 })
 
 Deno.test('setTriggersAggregator installs the exact instance getTriggersAggregator returns', () => {

@@ -9,7 +9,7 @@ on:
       - master
   push:
     branches:
-      - ${MAIN_BRANCH}
+      - master
 
 jobs:
   publish:
