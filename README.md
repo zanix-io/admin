@@ -125,176 +125,46 @@ const one = await triggers.get('billing', 'Invoice') // proxied straight to that
 
 ## 🗂️ Service Registry
 
-`ServiceRegistry` is a **static** list of known services — decided to be static config, at least
-initially, so there is no dynamic self-registration yet. Configure it either in code (constructor
-entries) or via the `ZANIX_ADMIN_SERVICES` env var (a JSON array of the same shape), or both — an
-env entry overrides a constructor entry with the same `serviceId`:
+`ServiceRegistry` is the static list of known services `TriggersAggregator` fans out to and proxies
+against — configure it in code (constructor entries), via the `ZANIX_ADMIN_SERVICES` env var, or
+both.
 
-```env
-ZANIX_ADMIN_SERVICES=[{"serviceId":"billing","adminBaseUrl":"http://billing.internal:30248/billing-rest"}]
-```
-
-Each entry's `serviceId` should match how that service is known elsewhere — e.g. its own
-`ADMIN_SERVER_ID` (see `@zanix/core`'s README) and its registered `JWK_PUB_<serviceId>` for
-authenticating to it (see `@zanix/auth`'s `exchangeServiceCredential`).
+See [`docs/service-registry.md`](./docs/service-registry.md) for the full configuration reference.
 
 ---
 
 ## 🔀 Triggers Aggregator
 
-`TriggersAggregator` wraps a `ServiceRegistry` with the actual fan-out/proxy logic:
+`TriggersAggregator` wraps a `ServiceRegistry` with the actual fan-out/proxy logic behind
+`zanix-admin`'s `/triggers` API (`TriggersController`) — `list()` fans out to every registered
+service, `get`/`create`/`update`/`remove` proxy to the one resolved service. Authentication is a
+pluggable seam (the constructor's `clientFactory` argument), not built in yet.
 
-| Method                              | Behavior                                                         |
-| ----------------------------------- | ---------------------------------------------------------------- |
-| `list()`                            | Fans out to **every** registered service, tagged by `serviceId`. |
-| `get(serviceId, model)`             | Proxies to the one resolved service.                             |
-| `create(serviceId, model, ...)`     | Proxies to the one resolved service.                             |
-| `update(serviceId, model, changes)` | Proxies to the one resolved service.                             |
-| `remove(serviceId, model)`          | Proxies to the one resolved service.                             |
-
-**Authentication is a pluggable seam, not built in yet.** The aggregator's second constructor
-argument, `clientFactory`, decides how each per-service `TriggersAdminClient` gets built — including
-whatever credential header that service's `AuthTokenValidation` expects. Left unset, requests go out
-with no credential at all, which only works against a service that doesn't require one:
-
-```typescript
-import { createServiceAssertion } from 'jsr:@zanix/auth@[version]'
-import {
-  ServiceRegistry,
-  TriggersAdminClient,
-  TriggersAggregator,
-} from 'jsr:@zanix/admin@[version]'
-
-const privateKey = Deno.env.get('ZANIX_ADMIN_PRIVATE_KEY')!
-const tokenCache = new Map<string, { token: string; expiresAt: number }>()
-
-// The actual HTTP call to that service's own exchange endpoint (wrapping
-// @zanix/auth's exchangeServiceCredential — see its own docs) is up to your app.
-async function getAccessToken(serviceId: string, exchangeUrl: string): Promise<string> {
-  const cached = tokenCache.get(serviceId)
-  if (cached && cached.expiresAt > Date.now()) return cached.token
-
-  const assertion = await createServiceAssertion({ serviceId: 'zanix-admin', privateKey })
-  const response = await fetch(exchangeUrl, {
-    method: 'POST',
-    body: JSON.stringify({ assertion }),
-  })
-  const { accessToken, expiresIn } = await response.json()
-  tokenCache.set(serviceId, { token: accessToken, expiresAt: Date.now() + expiresIn * 1000 })
-  return accessToken
-}
-
-const triggers = new TriggersAggregator(
-  new ServiceRegistry([/* ... */]),
-  async (service) =>
-    new TriggersAdminClient({
-      baseUrl: service.adminBaseUrl,
-      headers: {
-        'X-Znx-Authorization': `Bearer ${await getAccessToken(
-          service.serviceId,
-          `${service.adminBaseUrl}/auth/service-token`,
-        )}`,
-      },
-    }),
-)
-```
-
-A single service failing during `list()`'s fan-out fails the whole call today (`Promise.all`) —
-deliberately simple for now; see `TriggersAggregator`'s own JSDoc for how to compose partial-failure
-tolerance on top instead.
-
-### `TriggersController` — the HTTP surface over the aggregator above
-
-`TriggersController` is the actual `/triggers` route (`zanix-admin`'s public API surface, same as
-`TemplatesController` below), calling into whichever `TriggersAggregator` is currently installed:
-
-| Route                                | Behavior                                                     |
-| ------------------------------------ | ------------------------------------------------------------ |
-| `GET /triggers`                      | `list()` — fanned out across every service.                  |
-| `GET /triggers/:serviceId/:model`    | `get(serviceId, model)`.                                     |
-| `POST /triggers/:serviceId`          | `create(serviceId, body.model, body.active, body.triggers)`. |
-| `PUT /triggers/:serviceId/:model`    | `update(serviceId, model, { active?, triggers? })`.          |
-| `DELETE /triggers/:serviceId/:model` | `remove(serviceId, model)`.                                  |
-
-Install a real (authenticated) aggregator with `setTriggersAggregator` **before**
-`ZanixAdmin.start()` — left unset, the controller falls back to a default `TriggersAggregator` (a
-registry read from `ZANIX_ADMIN_SERVICES` only, unauthenticated client) via `getTriggersAggregator`,
-same as constructing one manually per [Basic Usage](#-basic-usage):
-
-```typescript
-import ZanixAdmin, { setTriggersAggregator, TriggersAggregator } from 'jsr:@zanix/admin@[version]'
-
-setTriggersAggregator(new TriggersAggregator(registry, clientFactory)) // see the pluggable-auth example above
-
-await ZanixAdmin.start()
-```
-
-Requires `ADMIN_ROLE`/`ADMIN_TRIGGERS_ROLE` (both defined in this package, and re-exported from
-`@zanix/core` for a business service's own use) and accepts either a human admin's `type: 'user'`
-token or a machine caller's `type: 'api'` one — same auth model as `TemplatesController`.
+See [`docs/triggers-aggregator.md`](./docs/triggers-aggregator.md) for the full method/route
+reference and a real pluggable-auth example.
 
 ---
 
 ## 📝 Templates API
 
 `TemplatesController` is `zanix-admin`'s **own** templates CRUD API (`/templates`) — unlike
-triggers, this one owns the data, via this package's own `TemplatesAdminService` (data layer), RTOs
-(validation contract), and `versionProtocol` (protocol negotiation, see below). `@zanix/core`'s own
-built-in `/admin/templates` re-exports these exact same symbols rather than redefining them, so the
-wire shape is identical either way — anything built against that contract (e.g.
-`@zanix/notifications`'s `RemoteTemplateBackend`, in Mode C) works against this unmodified.
+triggers, this one owns the data. It also exposes a batch, upsert-aware `POST /templates/sync` for
+callers with no local database access of their own (e.g. `@zanix/notifications`'s
+`RemoteTemplateBackend` in Mode C).
 
-```typescript
-import ZanixAdmin from 'jsr:@zanix/admin@[version]'
-
-// Requires a database connector to be configured (MONGO_URI, TEMPLATES_MODEL_NAME, etc.), same as
-// any @zanix/core-based service with DB-backed templates.
-await ZanixAdmin.start()
-```
-
-Requires `ADMIN_ROLE`/`ADMIN_TEMPLATES_ROLE` (both defined in this package, and re-exported from
-`@zanix/core` for a business service's own use), and accepts either a human admin's `type: 'user'`
-token or a machine caller's `type: 'api'` one — same as `@zanix/core`'s own admin APIs. Defaults to
-`isInternal: true` (see `createTemplatesController`/`ZanixAdmin.start`'s own `templates` option to
-change that or the route prefix). `AuthTokenValidation` and the role gate remain the load-bearing
-protection either way.
-
-### Batch code sync — `POST /templates/sync`
-
-Alongside the CRUD routes above, `TemplatesController` also exposes `POST /templates/sync`
-(`TemplatesAdminRepository.syncCodeTemplates`) — a batch, upsert-aware endpoint for a caller with
-**no local database access of its own**, e.g. `@zanix/notifications`'s `RemoteTemplateBackend` (Mode
-C, see its own `docs/templates.md#mode-c-remote-only-templates`). It accepts the caller's full
-current code-defined template set and reconciles it against this service's own database using the
-same `planCodeSync` (`@zanix/helpers`) rules `LocalTemplateBackend` applies locally — seed a
-brand-new `{channel,name}`, resync one nobody's edited directly since the last sync, leave a
-manually-edited one alone, and flip an entry no longer in the given set to `source: 'database'`
-(never delete it):
-
-```typescript
-// Body: { entries: [{ channel, name, hbs, hash }, ...] }
-// Response: { seeded: number; resynced: number }
-```
-
-This is **additive**, not a replacement for `create()`/`update()` — those keep their existing
-throw-on-conflict, human-facing CRUD semantics unchanged. It is also safe to call concurrently from
-N replicas of the same business service: each seed is a single atomic
-`updateOne(..., { upsert:
-true })`, so two replicas racing the same brand-new `{channel,name}`
-either both settle onto the same inserted row (only the one that actually performed the insert is
-counted in `seeded`) or one hits the collection's unique `{channel,name}` index as a duplicate-key
-error, which is caught and treated as "already seeded," never surfaced as a failure.
-
-`TemplatesAdminClient.sync(entries)` POSTs to this same route for `@zanix/admin`'s own internal
-callers — but `RemoteTemplateBackend` does **not** use it: it hand-rolls its own POST instead, since
-importing `TemplatesAdminClient` from `@zanix/notifications` would be circular (`@zanix/admin`
-already depends on `@zanix/notifications` for `ZanixTemplateAttrs`/`Notifiers`).
+See [`docs/templates-api.md`](./docs/templates-api.md) for the full CRUD/sync reference.
 
 ---
 
 ## 📚 Documentation
 
-Find detailed documentation, guides, and examples at: 🔗
+- [`docs/service-registry.md`](./docs/service-registry.md) — configuring the known-services list.
+- [`docs/triggers-aggregator.md`](./docs/triggers-aggregator.md) — fan-out/proxy methods, routes,
+  and pluggable per-service authentication.
+- [`docs/templates-api.md`](./docs/templates-api.md) — CRUD routes and the batch `/templates/sync`
+  endpoint.
+
+Find other Zanix libraries' own docs at: 🔗
 [https://github.com/zanix-io](https://github.com/zanix-io)
 
 ---

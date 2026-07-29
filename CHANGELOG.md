@@ -7,6 +7,15 @@ adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-07-28
+
+### Changed
+
+- Split the README's Service Registry/Triggers Aggregator/Templates API sections out into dedicated
+  `docs/` guides (`docs/service-registry.md`, `docs/triggers-aggregator.md`,
+  `docs/templates-api.md`), cross-linked to each other and back to the README, to keep the top-level
+  README skimmable.
+
 ## [0.1.0] - 2026-07-28
 
 ### Added
