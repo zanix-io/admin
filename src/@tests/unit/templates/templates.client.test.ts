@@ -105,17 +105,16 @@ Deno.test('TemplatesAdminClient.remove DELETEs /admin/templates/:channel/:name',
   assertSpyCalls(mockFetch, 1)
 })
 
-Deno.test('TemplatesAdminClient.sync POSTs entries as {entries}, returns summary', async () => {
-  const entries = [{ channel: 'email', name: 'generic', hbs: '<p>hi</p>', hash: 'h1' }]
+Deno.test('TemplatesAdminClient.sync POSTs {serviceId}, returns summary', async () => {
   const mockFetch = spy((_url: string, opts: any) => {
     assertEquals(opts.method, 'POST')
-    assertEquals(JSON.parse(opts.body), { entries })
+    assertEquals(JSON.parse(opts.body), { serviceId: 'billing' })
     return jsonResponse({ seeded: 1, resynced: 0 })
   })
   globalThis.fetch = mockFetch as unknown as typeof fetch
 
   const client = new TemplatesAdminClient({ baseUrl: 'http://svc.internal:1234' })
-  const result = await client.sync(entries as never)
+  const result = await client.sync('billing')
 
   assertEquals(result, { seeded: 1, resynced: 0 })
   const [url] = mockFetch.calls[0].args as [string, any]

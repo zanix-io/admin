@@ -1,7 +1,10 @@
 // deno-lint-ignore-file no-explicit-any
 import { assertEquals } from '@std/assert'
+import { stub } from '@std/testing/mock'
 import type { HandlerContext } from '@zanix/server'
+import { ProgramModule } from '@zanix/server'
 import { createTemplatesController } from 'modules/templates/templates.handler.ts'
+import { ServiceRegistry, setServiceRegistry } from 'modules/registry/registry.ts'
 
 const TemplatesController = createTemplatesController()
 
@@ -119,35 +122,61 @@ Deno.test("TemplatesController.remove falls back to 'unknown' with no session", 
   assertEquals(calls[0][2], 'unknown')
 })
 
-Deno.test('TemplatesController.sync forwards entries + session id, returns summary', async () => {
+// `sync()` no longer delegates to `this.interactor` (see `syncTemplatesFromRegisteredService`'s
+// own tests, `templates-sync.test.ts`) — these two just confirm the route forwards
+// `body.serviceId`/`session.id` into that standalone function correctly, using the same
+// registry/fetch/providers stubbing seam its own dedicated test suite already exercises fully.
+function withSyncEnv(updatedByCalls: unknown[][], fn: () => Promise<unknown>) {
+  setServiceRegistry(
+    new ServiceRegistry([{ serviceId: 'billing', adminBaseUrl: 'http://billing.internal' }]),
+  )
+  const fetchStub = stub(
+    globalThis,
+    'fetch',
+    () =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ resourceType: 'code-templates', generatedAt: '', items: [] }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+      ) as never,
+  )
+  const providersStub = stub(
+    Object.getPrototypeOf(ProgramModule),
+    'getProviders',
+    (() => ({
+      get: (_cls: unknown) => ({
+        syncCodeTemplates: (entries: unknown, updatedBy: unknown) => (
+          updatedByCalls.push([entries, updatedBy]), Promise.resolve({ seeded: 1, resynced: 0 })
+        ),
+      }),
+    })) as any,
+  )
+
+  return fn().finally(() => {
+    fetchStub.restore()
+    providersStub.restore()
+  })
+}
+
+Deno.test('TemplatesController.sync forwards serviceId + session id, returns summary', async () => {
   const calls: unknown[][] = []
-  const entries = [{ channel: 'email', name: 'generic', hbs: '<p>hi</p>', hash: 'h1' }]
   const ctx = {
-    payload: { body: { entries } },
+    payload: { body: { serviceId: 'billing' } },
     session: { id: 'service-account-1' },
   } as HandlerContext<never>
-  const result: unknown = await handler.sync.call(
-    fakeThis({
-      syncCodeTemplates: (...args: unknown[]) => (
-        calls.push(args), Promise.resolve({ seeded: 1, resynced: 0 })
-      ),
-    }),
-    ctx,
-  )
+
+  const result = await withSyncEnv(calls, () => handler.sync.call(fakeThis({}), ctx))
+
   assertEquals(result, { seeded: 1, resynced: 0 })
-  assertEquals(calls, [[entries, 'service-account-1']])
+  assertEquals(calls[0][1], 'service-account-1')
 })
 
 Deno.test("TemplatesController.sync falls back to 'unknown' with no session", async () => {
   const calls: unknown[][] = []
-  const ctx = { payload: { body: { entries: [] } } } as HandlerContext<never>
-  await handler.sync.call(
-    fakeThis({
-      syncCodeTemplates: (...args: unknown[]) => (
-        calls.push(args), Promise.resolve({ seeded: 0, resynced: 0 })
-      ),
-    }),
-    ctx,
-  )
+  const ctx = { payload: { body: { serviceId: 'billing' } } } as HandlerContext<never>
+
+  await withSyncEnv(calls, () => handler.sync.call(fakeThis({}), ctx))
+
   assertEquals(calls[0][1], 'unknown')
 })

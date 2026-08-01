@@ -64,6 +64,27 @@ export class ServiceRegistry {
   }
 }
 
+let activeRegistry: ServiceRegistry | undefined
+
+/**
+ * Installs the {@link ServiceRegistry} instance shared by every consumer that needs to know about
+ * registered business services — `TriggersAggregator` (fanning out `/admin/triggers`/Discovery
+ * reads) and `TemplatesAdminService` (pulling a service's own code-templates Discovery snapshot)
+ * both resolve the same installed instance via {@link getServiceRegistry}, rather than each holding
+ * an independent one that could drift out of sync. Call once during startup; unset,
+ * {@link getServiceRegistry} falls back to a default instance (entries from
+ * {@link SERVICE_REGISTRY_ENV} only).
+ */
+export const setServiceRegistry = (registry: ServiceRegistry): void => {
+  activeRegistry = registry
+}
+
+/** Returns the installed {@link ServiceRegistry}, lazily building a default one if none was set. */
+export const getServiceRegistry = (): ServiceRegistry => {
+  if (!activeRegistry) activeRegistry = new ServiceRegistry()
+  return activeRegistry
+}
+
 function readFromEnv(): ServiceRegistryEntry[] {
   const raw = Deno.env.get(SERVICE_REGISTRY_ENV)
   if (!raw) return []

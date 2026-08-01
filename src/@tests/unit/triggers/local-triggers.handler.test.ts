@@ -43,7 +43,7 @@ Deno.test('TriggersAdminController.create forwards model/active/triggers to crea
     ctx,
   )
   assertEquals(result, 'create-result')
-  assertEquals(calls, [['m', true, { pre: {} }]])
+  assertEquals(calls, [[{ model: 'm', active: true, triggers: { pre: {} } }]])
 })
 
 Deno.test('TriggersAdminController.update forwards model + {active, triggers} to update()', () => {

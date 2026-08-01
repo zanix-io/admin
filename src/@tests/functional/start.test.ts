@@ -13,15 +13,20 @@ stub(console, 'warn')
 Deno.test({
   sanitizeOps: false,
   sanitizeResources: false,
-  name: 'ZanixAdmin.start() registers /triggers and /templates behind auth, isInternal by default',
+  name:
+    "ZanixAdmin.start() registers /triggers and /templates behind auth, bound to 'admin' by default",
   fn: async () => {
+    // There is no auto-generated anchored id anymore — set one explicitly so both controllers
+    // (defaulting to the `'admin'` Application) are reachable at a known, id-prefixed address.
+    Deno.env.set('ADMIN_SERVER_ID', 'start-test')
+
     const servers = await ZanixAdmin.start()
-    assert(servers.length > 0, 'an internal REST server should have been started')
+    assert(servers.length > 0, 'an admin REST server should have been started')
 
     const info = webServerManager.info(servers[0])
     assert(info.addr, 'the started server should be listening')
-    // Both controllers default to `isInternal: true`, so they're only reachable under the
-    // internal server's own random UUID prefix (no `/api/`) — same convention core's own
+    // Both controllers default to the `'admin'` Application, so they're only reachable under the
+    // admin server's own id-anchored prefix (no `/api/`) — same convention core's own
     // `/admin/triggers`/`/admin/templates` use. `@Get()` with no path argument uses the method
     // name as its sub-path (`list`), same convention `TriggersAdminClient`/`TemplatesAdminClient`
     // already rely on for `/admin/triggers/list`/`/admin/templates/list`.
@@ -35,6 +40,7 @@ Deno.test({
     assertEquals(templates.status, 401)
     await templates.body?.cancel()
 
+    Deno.env.delete('ADMIN_SERVER_ID')
     await ZanixAdmin.stop()
   },
 })

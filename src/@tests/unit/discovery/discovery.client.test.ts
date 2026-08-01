@@ -1,0 +1,34 @@
+// deno-lint-ignore-file no-explicit-any
+import { assertEquals } from '@std/assert'
+import { assertSpyCalls, spy } from '@std/testing/mock'
+import { DiscoveryAdminClient } from 'modules/discovery/discovery.client.ts'
+
+globalThis.fetch = () => {
+  throw new Error('fetch not mocked')
+}
+
+const jsonResponse = (body: unknown, status = 200) =>
+  Promise.resolve(
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { 'Content-Type': 'application/json' },
+    }),
+  )
+
+Deno.test('DiscoveryAdminClient.snapshot GETs the endpoint, unwraps items', async () => {
+  const items = [{ model: 'User', active: true, triggers: {}, isDefault: false }]
+  const mockFetch = spy((_url: string, _opts: any) =>
+    jsonResponse({ resourceType: 'triggers', generatedAt: '2026-01-01T00:00:00.000Z', items })
+  )
+  globalThis.fetch = mockFetch as unknown as typeof fetch
+
+  const client = new DiscoveryAdminClient({ baseUrl: 'http://svc.internal:1234' })
+  const result = await client.snapshot('triggers')
+
+  assertEquals(result, items)
+  assertSpyCalls(mockFetch, 1)
+  const [url, opts] = mockFetch.calls[0].args as [string, any]
+  assertEquals(url, 'http://svc.internal:1234/.well-known/zanix/triggers')
+  assertEquals(opts.method, 'GET')
+  assertEquals(opts.headers['X-Znx-Discovery-Protocol'], '1')
+})

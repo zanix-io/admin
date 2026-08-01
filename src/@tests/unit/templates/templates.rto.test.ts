@@ -69,31 +69,12 @@ Deno.test('UpdateTemplateRTO rejects a non-boolean active value', async () => {
   assert(threw)
 })
 
-Deno.test('SyncTemplatesRTO validates each entry in the array', async () => {
-  const rto = await classValidation(SyncTemplatesRTO, {
-    entries: [
-      { channel: 'email', name: 'generic', hbs: '<p>{{content}}</p>', hash: 'hash-1' },
-      { channel: 'sms', name: 'generic', hbs: 'Hi {{name}}', hash: 'hash-2' },
-    ],
-  })
-  assertEquals(rto.entries.length, 2)
-  assertEquals(rto.entries[0].channel, 'email')
-  assertEquals(rto.entries[1].hash, 'hash-2')
+Deno.test('SyncTemplatesRTO validates a plain "serviceId" string', async () => {
+  const rto = await classValidation(SyncTemplatesRTO, { serviceId: 'billing' })
+  assertEquals(rto.serviceId, 'billing')
 })
 
-Deno.test('SyncTemplatesRTO rejects when an entry is missing a required field', async () => {
-  let threw = false
-  try {
-    await classValidation(SyncTemplatesRTO, {
-      entries: [{ channel: 'email', name: 'generic', hbs: '<p>hi</p>' }],
-    })
-  } catch {
-    threw = true
-  }
-  assert(threw)
-})
-
-Deno.test('SyncTemplatesRTO rejects when entries is missing entirely', async () => {
+Deno.test('SyncTemplatesRTO rejects when serviceId is missing entirely', async () => {
   let threw = false
   try {
     await classValidation(SyncTemplatesRTO, {})

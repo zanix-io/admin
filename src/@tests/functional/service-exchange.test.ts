@@ -1,6 +1,11 @@
 import { assert, assertEquals } from '@std/assert'
 import { stub } from '@std/testing/mock'
-import { ADMIN_PROTOCOL_HEADER, bootstrapServers, webServerManager } from '@zanix/server'
+import {
+  ADMIN_PROTOCOL_HEADER,
+  bootstrapServers,
+  ProgramModule,
+  webServerManager,
+} from '@zanix/server'
 import { createServiceAssertion } from '@zanix/auth'
 import { generateRSAKeys } from '@zanix/helpers'
 import { ADMIN_PROTOCOL_VERSION } from '../../../mod.ts'
@@ -20,9 +25,13 @@ Deno.test({
   sanitizeResources: false,
   name: 'service-exchange: rejects garbage, mints a token for a valid assertion',
   fn: async () => {
-    createServiceExchangeController()
-    const [serverId] = await bootstrapServers({ rest: { isInternal: true } })
-    assert(serverId, 'the internal REST server should have been started')
+    await ProgramModule.defineApplication('admin', () => {
+      createServiceExchangeController()
+    })
+    const [serverId] = await bootstrapServers({
+      rest: { application: 'admin', id: 'service-exchange-test' },
+    })
+    assert(serverId, 'the admin REST server should have been started')
 
     const info = webServerManager.info(serverId)
     assert(info.addr, 'the started server should be listening')

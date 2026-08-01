@@ -1,5 +1,10 @@
-import type { Notifiers, ZanixTemplateAttrs } from '@zanix/notifications'
-import type { SyncCodeTemplateEntry, SyncCodeTemplatesResult } from './templates.repository.ts'
+import type {
+  CreateTemplateInput,
+  Notifiers,
+  SyncCodeTemplatesResult,
+  UpdateTemplateInput,
+  ZanixTemplateAttrs,
+} from '@zanix/notifications'
 
 import { ADMIN_PROTOCOL_HEADER, RestClient } from '@zanix/server'
 import { ADMIN_PROTOCOL_VERSION } from 'utils/constants.ts'
@@ -56,13 +61,7 @@ export class TemplatesAdminClient extends RestClient {
   }
 
   /** Creates a new template entry. */
-  public create(input: {
-    channel: Notifiers
-    name: string
-    hbs: string
-    description?: string
-    availableVariables?: string[]
-  }): Promise<ZanixTemplateAttrs> {
+  public create(input: CreateTemplateInput): Promise<ZanixTemplateAttrs> {
     return this.http.post<ZanixTemplateAttrs>('/admin/templates', {
       body: JSON.stringify(input),
     })
@@ -72,12 +71,7 @@ export class TemplatesAdminClient extends RestClient {
   public update(
     channel: Notifiers,
     name: string,
-    changes: {
-      hbs?: string
-      active?: boolean
-      description?: string
-      availableVariables?: string[]
-    },
+    changes: UpdateTemplateInput,
   ): Promise<ZanixTemplateAttrs> {
     return this.http.put<ZanixTemplateAttrs>(`/admin/templates/${channel}/${name}`, {
       body: JSON.stringify(changes),
@@ -90,15 +84,16 @@ export class TemplatesAdminClient extends RestClient {
   }
 
   /**
-   * Batch code→database sync — see `TemplatesAdminRepository.syncCodeTemplates`. Usable by
-   * `@zanix/admin`'s own internal callers; NOT used by `@zanix/notifications`'
-   * `RemoteTemplateBackend`, which hand-rolls its own POST instead (importing this client from
-   * `@zanix/notifications` would be circular, since `@zanix/admin` already depends on
-   * `@zanix/notifications` for `ZanixTemplateAttrs`/`Notifiers`).
+   * Triggers a batch code→database sync, pulled from `serviceId`'s own
+   * `/.well-known/zanix/code-templates` Discovery snapshot — see
+   * `TemplatesAdminService.syncCodeTemplatesFromService`. Usable by `@zanix/admin`'s own internal
+   * callers; NOT used by `@zanix/notifications`'s `RemoteTemplateBackend`, which hand-rolls its own
+   * POST instead (importing this client from `@zanix/notifications` would be circular, since
+   * `@zanix/admin` already depends on `@zanix/notifications` for `ZanixTemplateAttrs`/`Notifiers`).
    */
-  public sync(entries: SyncCodeTemplateEntry[]): Promise<SyncCodeTemplatesResult> {
+  public sync(serviceId: string): Promise<SyncCodeTemplatesResult> {
     return this.http.post<SyncCodeTemplatesResult>('/admin/templates/sync', {
-      body: JSON.stringify({ entries }),
+      body: JSON.stringify({ serviceId }),
     })
   }
 }

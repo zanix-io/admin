@@ -3,22 +3,28 @@
 `TriggersAggregator` wraps a [`ServiceRegistry`](./service-registry.md) with the actual
 fan-out/proxy logic:
 
-| Method                              | Behavior                                                         |
-| ----------------------------------- | ---------------------------------------------------------------- |
-| `list()`                            | Fans out to **every** registered service, tagged by `serviceId`. |
-| `get(serviceId, model)`             | Proxies to the one resolved service.                             |
-| `create(serviceId, model, ...)`     | Proxies to the one resolved service.                             |
-| `update(serviceId, model, changes)` | Proxies to the one resolved service.                             |
-| `remove(serviceId, model)`          | Proxies to the one resolved service.                             |
+| Method                              | Behavior                                                                                                                |
+| ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `list()`                            | Fans out to **every** registered service's own `/.well-known/zanix/triggers` Discovery snapshot, tagged by `serviceId`. |
+| `get(serviceId, model)`             | Proxies to the one resolved service's CRUD API.                                                                         |
+| `create(serviceId, model, ...)`     | Proxies to the one resolved service's CRUD API.                                                                         |
+| `update(serviceId, model, changes)` | Proxies to the one resolved service's CRUD API.                                                                         |
+| `remove(serviceId, model)`          | Proxies to the one resolved service's CRUD API.                                                                         |
 
-**Authentication is a pluggable seam, not built in yet.** The aggregator's second constructor
-argument, `clientFactory`, decides how each per-service `TriggersAdminClient` gets built — including
-whatever credential header that service's `AuthTokenValidation` expects. Left unset, requests go out
-with no credential at all, which only works against a service that doesn't require one:
+`list()` reads from Discovery rather than the CRUD API's own `/admin/triggers/list` — a read-only
+operation goes through the read-only protocol; every other method mutates or targets a single entry,
+so it stays on the CRUD API. See `@zanix/server`'s `docs/HANDLERS.md`'s "Discovery" section.
+
+**Authentication is a pluggable seam, not built in yet.** The aggregator's constructor takes two
+independent factories: `clientFactory` decides how each per-service `TriggersAdminClient` (CRUD) is
+built, and `discoveryClientFactory` decides how each per-service `DiscoveryAdminClient` (`list()`'s
+Discovery reads) is built — both default to unauthenticated, which only works against a service that
+doesn't require credentials for that surface:
 
 ```typescript
 import { createServiceAssertion } from 'jsr:@zanix/auth@[version]'
 import {
+  DiscoveryAdminClient,
   ServiceRegistry,
   TriggersAdminClient,
   TriggersAggregator,
@@ -43,17 +49,24 @@ async function getAccessToken(serviceId: string, exchangeUrl: string): Promise<s
   return accessToken
 }
 
+const authHeaders = async (service: { serviceId: string; adminBaseUrl: string }) => ({
+  'X-Znx-Authorization': `Bearer ${await getAccessToken(
+    service.serviceId,
+    `${service.adminBaseUrl}/auth/service-token`,
+  )}`,
+})
+
 const triggers = new TriggersAggregator(
   new ServiceRegistry([/* ... */]),
   async (service) =>
-    new TriggersAdminClient({
+    new TriggersAdminClient({ baseUrl: service.adminBaseUrl, headers: await authHeaders(service) }),
+  // Third, independent factory for list()'s Discovery reads — same credential here, but it
+  // doesn't have to be: a deployment could leave this one unauthenticated while still requiring
+  // auth for CRUD, or vice versa.
+  async (service) =>
+    new DiscoveryAdminClient({
       baseUrl: service.adminBaseUrl,
-      headers: {
-        'X-Znx-Authorization': `Bearer ${await getAccessToken(
-          service.serviceId,
-          `${service.adminBaseUrl}/auth/service-token`,
-        )}`,
-      },
+      headers: await authHeaders(service),
     }),
 )
 ```
@@ -70,18 +83,19 @@ tolerance on top instead.
 [`TemplatesController`](./templates-api.md)), calling into whichever `TriggersAggregator` is
 currently installed:
 
-| Route                                | Behavior                                                     |
-| ------------------------------------ | ------------------------------------------------------------ |
-| `GET /triggers`                      | `list()` — fanned out across every service.                  |
-| `GET /triggers/:serviceId/:model`    | `get(serviceId, model)`.                                     |
-| `POST /triggers/:serviceId`          | `create(serviceId, body.model, body.active, body.triggers)`. |
-| `PUT /triggers/:serviceId/:model`    | `update(serviceId, model, { active?, triggers? })`.          |
-| `DELETE /triggers/:serviceId/:model` | `remove(serviceId, model)`.                                  |
+| Route                                | Behavior                                                         |
+| ------------------------------------ | ---------------------------------------------------------------- |
+| `GET /triggers`                      | `list()` — fanned out across every service's Discovery snapshot. |
+| `GET /triggers/:serviceId/:model`    | `get(serviceId, model)`.                                         |
+| `POST /triggers/:serviceId`          | `create(serviceId, body.model, body.active, body.triggers)`.     |
+| `PUT /triggers/:serviceId/:model`    | `update(serviceId, model, { active?, triggers? })`.              |
+| `DELETE /triggers/:serviceId/:model` | `remove(serviceId, model)`.                                      |
 
 Install a real (authenticated) aggregator with `setTriggersAggregator` **before**
-`ZanixAdmin.start()` — left unset, the controller falls back to a default `TriggersAggregator` (a
-registry read from `ZANIX_ADMIN_SERVICES` only, unauthenticated client) via `getTriggersAggregator`,
-same as constructing one manually per the README's own [Basic Usage](../README.md#-basic-usage):
+`ZanixAdmin.start()` — left unset, the controller falls back to a default `TriggersAggregator` (the
+shared `ServiceRegistry` from `getServiceRegistry`, unauthenticated clients) via
+`getTriggersAggregator`, same as constructing one manually per the README's own
+[Basic Usage](../README.md#-basic-usage):
 
 ```typescript
 import ZanixAdmin, { setTriggersAggregator, TriggersAggregator } from 'jsr:@zanix/admin@[version]'
@@ -102,5 +116,6 @@ token or a machine caller's `type: 'api'` one — same auth model as
 
 - [Service Registry](./service-registry.md) — configuring the services `TriggersAggregator` fans out
   to and proxies against.
-- [Templates API](./templates-api.md) — `zanix-admin`'s other, oppositely-owned API surface.
+- [Templates API](./templates-api.md) — `zanix-admin`'s other data-owner-composed API surface
+  (`@zanix/notifications` owns templates' CRUD the same way `@zanix/datamaster` owns triggers').
 - [../README.md](../README.md) — package overview and quick start.

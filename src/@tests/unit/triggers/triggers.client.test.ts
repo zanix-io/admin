@@ -59,7 +59,7 @@ Deno.test('TriggersAdminClient.create POSTs model/active/triggers as the body', 
   globalThis.fetch = mockFetch as unknown as typeof fetch
 
   const client = new TriggersAdminClient({ baseUrl: 'http://svc.internal:1234' })
-  const result = await client.create('User', true, { pre: {} })
+  const result = await client.create({ model: 'User', active: true, triggers: { pre: {} } })
 
   assertEquals(result, { model: 'User', active: true, triggers: { pre: {} }, isDefault: false })
   assertSpyCalls(mockFetch, 1)

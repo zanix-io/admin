@@ -11,8 +11,9 @@ export interface ServiceExchangeControllerInstance extends ZanixController {
 }
 
 /**
- * Machine-to-machine credential exchange — internal-only (`isInternal: true`), the HTTP route
- * `@zanix/auth`'s `docs/service-credential.md` deliberately leaves for whichever consumer needs it
+ * Machine-to-machine credential exchange — always registered under the `'admin'` Application (see
+ * `docs/HANDLERS.md`'s "Applications" section), the HTTP route `@zanix/auth`'s
+ * `docs/service-credential.md` deliberately leaves for whichever consumer needs it
  * (`@zanix/auth` exports the primitive, not a mounted endpoint, the same way it doesn't own any
  * other HTTP route). This is that route: a thin wrapper around `exchangeServiceCredential`, reused
  * as-is.
@@ -30,8 +31,8 @@ export interface ServiceExchangeControllerInstance extends ZanixController {
  * would register `/admin/service-token` the instant *anything* imports `@zanix/admin`, for any
  * reason, regardless of whether that caller wanted it registered at all. Deferring the decorator to
  * an explicit call site (`@zanix/core`'s `defineAdminMetadata()`) keeps registration intentional.
- * No options today — always `isInternal: true, prefix: 'admin/service-token'` — a zero-argument
- * factory rather than a speculative options bag.
+ * No options today — always `prefix: 'admin/service-token'` — a zero-argument factory rather than
+ * a speculative options bag.
  *
  * @requires @zanix/auth
  */
@@ -39,7 +40,6 @@ export function createServiceExchangeController(): new (
   context: HandlerContext,
 ) => ServiceExchangeControllerInstance {
   @Controller({
-    isInternal: true,
     prefix: 'admin/service-token',
     versionProtocol: ADMIN_VERSION_PROTOCOL,
   })

@@ -1,6 +1,6 @@
 import { assert, assertEquals } from '@std/assert'
 import { stub } from '@std/testing/mock'
-import { webServerManager } from '@zanix/server'
+import { DEFAULT_APPLICATION, webServerManager } from '@zanix/server'
 import ZanixAdmin from '../../../mod.ts'
 
 // Its own file: `ZanixAdmin.start()` registers routes once per process (route paths can't be
@@ -13,11 +13,12 @@ stub(console, 'warn')
 Deno.test({
   sanitizeOps: false,
   sanitizeResources: false,
-  name: 'ZanixAdmin.start(): triggers: { isInternal: false } mounts /triggers on the public server',
+  name:
+    "ZanixAdmin.start(): triggers: { application: 'main' } mounts /triggers on the public server",
   fn: async () => {
     const publicServers: string[] = []
     const servers = await ZanixAdmin.start({
-      triggers: { isInternal: false },
+      triggers: { application: DEFAULT_APPLICATION },
       rest: { onCreate: (id) => publicServers.push(id) },
     })
     assert(servers.length > 0, 'at least one server should have been started')

@@ -59,7 +59,7 @@ Deno.test('TriggersController.create forwards serviceId + body fields', async ()
   } as HandlerContext<never>
   const result = await controller.create(ctx)
   assertEquals(result, { model: 'Invoice', ...TRIGGER_DEFAULTS })
-  assertEquals(calls, [['billing', 'Invoice', true, { onCreate: [] }]])
+  assertEquals(calls, [['billing', { model: 'Invoice', active: true, triggers: { onCreate: [] } }]])
 })
 
 Deno.test('TriggersController.update forwards serviceId/model + changes', async () => {

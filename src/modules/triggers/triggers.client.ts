@@ -1,4 +1,4 @@
-import type { Triggers, TriggersModelAttrs } from '@zanix/database'
+import type { CreateTriggerInput, TriggersModelAttrs, UpdateTriggerInput } from '@zanix/database'
 
 import { ADMIN_PROTOCOL_HEADER, RestClient } from '@zanix/server'
 import { ADMIN_PROTOCOL_VERSION } from 'utils/constants.ts'
@@ -53,16 +53,16 @@ export class TriggersAdminClient extends RestClient {
   }
 
   /** Creates a new trigger configuration entry for `model`. */
-  public create(model: string, active: boolean, triggers: Triggers): Promise<TriggersModelAttrs> {
+  public create(input: CreateTriggerInput): Promise<TriggersModelAttrs> {
     return this.http.post<TriggersModelAttrs>('/admin/triggers', {
-      body: JSON.stringify({ model, active, triggers }),
+      body: JSON.stringify(input),
     })
   }
 
   /** Updates a trigger configuration entry's `active`/`triggers` fields. */
   public update(
     model: string,
-    changes: { active?: boolean; triggers?: Triggers },
+    changes: UpdateTriggerInput,
   ): Promise<TriggersModelAttrs> {
     return this.http.put<TriggersModelAttrs>(`/admin/triggers/${model}`, {
       body: JSON.stringify(changes),

@@ -9,6 +9,7 @@ import {
   setTriggersAggregator,
   TriggersAggregator,
   type TriggersClientFactory,
+  type TriggersDiscoveryClientFactory,
 } from 'modules/triggers/triggers.aggregator.ts'
 
 console.error = () => {}
@@ -23,6 +24,10 @@ function fakeClient(overrides: Partial<Record<string, (...args: any[]) => any>> 
   } as never
 }
 
+function fakeDiscoveryClient(snapshot: (...args: any[]) => any): any {
+  return { snapshot } as never
+}
+
 const registry = new ServiceRegistry([
   { serviceId: 'billing', adminBaseUrl: 'http://billing.internal' },
   { serviceId: 'inventory', adminBaseUrl: 'http://inventory.internal' },
@@ -30,21 +35,21 @@ const registry = new ServiceRegistry([
 
 const TRIGGER_DEFAULTS = { active: true, triggers: {}, isDefault: false }
 
-Deno.test('TriggersAggregator.list fans out, tagging results by serviceId', async () => {
+Deno.test('TriggersAggregator.list fans out via Discovery, tagged by serviceId', async () => {
   const calls: string[] = []
-  const clientFactory: TriggersClientFactory = (service) => {
+  const discoveryClientFactory: TriggersDiscoveryClientFactory = (service) => {
     calls.push(service.serviceId)
-    return fakeClient({
-      list: () =>
-        Promise.resolve(
-          service.serviceId === 'billing'
-            ? [{ model: 'Invoice', ...TRIGGER_DEFAULTS }]
-            : [{ model: 'Item', ...TRIGGER_DEFAULTS }],
-        ),
+    return fakeDiscoveryClient((resourceType: string) => {
+      assertEquals(resourceType, 'triggers')
+      return Promise.resolve(
+        service.serviceId === 'billing'
+          ? [{ model: 'Invoice', ...TRIGGER_DEFAULTS }]
+          : [{ model: 'Item', ...TRIGGER_DEFAULTS }],
+      )
     })
   }
 
-  const aggregator = new TriggersAggregator(registry, clientFactory)
+  const aggregator = new TriggersAggregator(registry, undefined, discoveryClientFactory)
   const result: AggregatedTrigger[] = await aggregator.list()
 
   assertEquals(calls, ['billing', 'inventory'])
@@ -87,10 +92,14 @@ Deno.test('TriggersAggregator.create forwards model/active/triggers', async () =
     })
 
   const aggregator = new TriggersAggregator(registry, clientFactory)
-  const result = await aggregator.create('billing', 'Invoice', true, { pre: [] } as never)
+  const result = await aggregator.create('billing', {
+    model: 'Invoice',
+    active: true,
+    triggers: { pre: [] } as never,
+  })
 
   assertEquals(result, { ok: true } as never)
-  assertEquals(calls, [['Invoice', true, { pre: [] }]])
+  assertEquals(calls, [[{ model: 'Invoice', active: true, triggers: { pre: [] } }]])
 })
 
 Deno.test('TriggersAggregator.update forwards model/changes to the resolved service', async () => {
@@ -157,6 +166,46 @@ Deno.test({
       assertEquals(result, { model: 'Invoice', ...TRIGGER_DEFAULTS })
       assertEquals(fetchStub.calls.length, 1)
       assert(String(fetchStub.calls[0].args[0]).startsWith('http://billing.internal'))
+    } finally {
+      fetchStub.restore()
+    }
+  },
+})
+
+Deno.test({
+  name: 'TriggersAggregator.list defaults to an unauthenticated DiscoveryAdminClient',
+  fn: async () => {
+    const fetchStub = stub(
+      globalThis,
+      'fetch',
+      () =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify({
+              resourceType: 'triggers',
+              generatedAt: '2026-01-01T00:00:00.000Z',
+              items: [{ model: 'Invoice', ...TRIGGER_DEFAULTS }],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          ),
+        ) as never,
+    )
+
+    try {
+      const aggregator = new TriggersAggregator(
+        new ServiceRegistry([
+          { serviceId: 'billing', adminBaseUrl: 'http://billing.internal' },
+        ]),
+      )
+      const result = await aggregator.list()
+
+      assertEquals(result, [{ model: 'Invoice', ...TRIGGER_DEFAULTS, serviceId: 'billing' }])
+      assertEquals(fetchStub.calls.length, 1)
+      assert(
+        String(fetchStub.calls[0].args[0]).startsWith(
+          'http://billing.internal/.well-known/zanix/triggers',
+        ),
+      )
     } finally {
       fetchStub.restore()
     }

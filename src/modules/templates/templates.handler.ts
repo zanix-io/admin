@@ -1,12 +1,12 @@
 import type { HandlerContext } from '@zanix/server'
-import type { ZanixTemplateAttrs } from '@zanix/notifications'
-import type { SyncCodeTemplatesResult } from './templates.repository.ts'
+import type { SyncCodeTemplatesResult, ZanixTemplateAttrs } from '@zanix/notifications'
 
 import { Controller, Delete, Get, Post, Put, ZanixController } from '@zanix/server'
 import { AuthTokenValidation } from '@zanix/auth'
-import { ADMIN_ROLE, ADMIN_TEMPLATES_ROLE } from 'utils/constants.ts'
+import { TemplatesAdminService } from '@zanix/notifications'
+import { ADMIN_AUTH_TYPES, ADMIN_ROLE, ADMIN_TEMPLATES_ROLE } from 'utils/constants.ts'
 import { ADMIN_VERSION_PROTOCOL } from '../protocol/version-protocol.ts'
-import { TemplatesAdminService } from './templates.service.ts'
+import { syncTemplatesFromRegisteredService } from './templates-sync.ts'
 import {
   CreateTemplateRTO,
   SyncTemplatesRTO,
@@ -18,19 +18,10 @@ const REQUIRED_ROLE = [ADMIN_ROLE, ADMIN_TEMPLATES_ROLE]
 // Accepts either a human admin's user-shaped token or a machine caller's api-shaped one (e.g. a
 // business service's `RemoteTemplateBackend`) — see `@zanix/auth`'s `AuthTokenValidation({ type })`
 // array support.
-const AUTH_TYPES = ['user', 'api'] as const
+const AUTH_TYPES = ADMIN_AUTH_TYPES
 
 /** Options accepted by {@link createTemplatesController}. */
 export interface TemplatesControllerOptions {
-  /**
-   * Whether this route is only mounted on a server bootstrapped with a matching
-   * `isInternal: true` (see `bootstrapServers`'s `BootstrapServerOptions[type].isInternal`).
-   * Defaults to `true` — `zanix-admin`'s own admin/ops surface is not meant to be reachable by an
-   * arbitrary public caller. Set to `false` if your deployment platform genuinely can't isolate an
-   * internal server; `AuthTokenValidation` + the role gate remain the load-bearing protection
-   * either way.
-   */
-  isInternal?: boolean
   /** The route prefix, e.g. `'templates'` (default) for `/templates`. */
   prefix?: string
 }
@@ -57,13 +48,21 @@ export interface TemplatesControllerInstance extends ZanixController<TemplatesAd
  * `TemplatesAdminService` (data layer), RTOs (validation contract), and `adminProtocolInterceptor`
  * — the same wire shape `@zanix/core`'s own built-in `/admin/templates` exposes for any business
  * service (it re-exports these same symbols from this package — see its README's "Admin APIs"
- * section), so anything built against that contract (e.g. `@zanix/notifications`'s
- * `RemoteTemplateBackend`) works against this unmodified.
+ * section). `POST sync` pulls a registered service's code templates via its own
+ * `/.well-known/zanix/code-templates` Discovery endpoint (see
+ * `@zanix/notifications`'s `defineCodeTemplatesDiscovery`) rather than accepting them as a
+ * request body — a `RemoteTemplateBackend` triggers this by posting its own `serviceId`, not its
+ * template contents.
  *
- * A factory rather than a plain class because `@Controller`'s `isInternal`/`prefix` are
- * decorator-time (static) config — `ZanixAdmin.start()` calls this once at boot with whatever
- * `options.templates` it was given (see its own docs); an app wiring this manually can call it
- * directly instead.
+ * A factory rather than a plain class because `@Controller`'s `prefix` is decorator-time (static)
+ * config — called once at boot by either `ZanixAdmin.start()` (with whatever `options.templates`
+ * it was given) or this package's own `defineAdminMetadata()` (called in turn by `@zanix/core`'s
+ * `start()`, fixed at `prefix: 'admin/templates'`); an app wiring this manually can call it directly
+ * instead. Which Application (see `@zanix/server`'s `docs/HANDLERS.md`'s "Applications" section)
+ * this route belongs to is decided by whichever `defineApplication(...)` scope is active when this
+ * call runs, not by an option here — see the caller's own docs (`ZanixAdmin.start()`'s
+ * `templates.application`, or this package's own `ADMIN_TEMPLATES_APPLICATION` env var) for how that's
+ * controlled.
  *
  * @requires @zanix/notifications
  * @requires @zanix/auth
@@ -71,11 +70,10 @@ export interface TemplatesControllerInstance extends ZanixController<TemplatesAd
 export function createTemplatesController(
   options: TemplatesControllerOptions = {},
 ): new (context: HandlerContext) => TemplatesControllerInstance {
-  const { isInternal = true, prefix = 'templates' } = options
+  const { prefix = 'templates' } = options
 
   @Controller({
     prefix,
-    isInternal,
     Interactor: TemplatesAdminService,
     versionProtocol: ADMIN_VERSION_PROTOCOL,
   })
@@ -135,17 +133,19 @@ export function createTemplatesController(
       return { deactivated: name }
     }
 
-    // Batch upsert-aware sync for a caller with no local database access of its own (e.g.
-    // `@zanix/notifications`'s `RemoteTemplateBackend`) — see `TemplatesAdminRepository.syncCodeTemplates`.
-    // Accepts the same `AUTH_TYPES` as every other route here, so a machine (`type: 'api'`) caller
-    // works exactly like a human admin does against the rest of this controller.
+    // Batch upsert-aware sync, pulled from `serviceId`'s own `/.well-known/zanix/code-templates`
+    // Discovery snapshot rather than a pushed request body — see this package's own
+    // `syncTemplatesFromRegisteredService` (cross-service orchestration, not part of the DI-bound
+    // `Interactor` since it never operates within a real request context of its own). Accepts the
+    // same `AUTH_TYPES` as every other route here, so a machine (`type: 'api'`) caller works
+    // exactly like a human admin does against the rest of this controller.
     @Post('sync', { Body: SyncTemplatesRTO })
     @AuthTokenValidation({ permissions: REQUIRED_ROLE, type: AUTH_TYPES })
     public sync(
       ctx: HandlerContext<{ body: SyncTemplatesRTO }>,
     ): Promise<SyncCodeTemplatesResult> {
-      return this.interactor.syncCodeTemplates(
-        ctx.payload.body.entries,
+      return syncTemplatesFromRegisteredService(
+        ctx.payload.body.serviceId,
         ctx.session?.id ?? 'unknown',
       )
     }

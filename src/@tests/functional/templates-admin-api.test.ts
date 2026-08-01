@@ -1,6 +1,6 @@
 import { assert, assertEquals } from '@std/assert'
 import { stub } from '@std/testing/mock'
-import { bootstrapServers, webServerManager } from '@zanix/server'
+import { bootstrapServers, ProgramModule, webServerManager } from '@zanix/server'
 import { createTemplatesController } from 'modules/templates/templates.handler.ts'
 
 // The real, full-HTTP-dispatch home for a business service's own `/admin/templates` — moved here
@@ -20,11 +20,16 @@ stub(console, 'warn')
 Deno.test({
   sanitizeOps: false,
   sanitizeResources: false,
-  name: 'TemplatesController (admin/templates prefix): internal-only, rejects unauthenticated',
+  name:
+    'TemplatesController (admin/templates prefix): admin Application only, rejects unauthenticated',
   fn: async () => {
-    createTemplatesController({ prefix: 'admin/templates' })
-    const [serverId] = await bootstrapServers({ rest: { isInternal: true } })
-    assert(serverId, 'the internal REST server should have been started')
+    await ProgramModule.defineApplication('admin', () => {
+      createTemplatesController({ prefix: 'admin/templates' })
+    })
+    const [serverId] = await bootstrapServers({
+      rest: { application: 'admin', id: 'templates-admin-api-test' },
+    })
+    assert(serverId, 'the admin REST server should have been started')
 
     const info = webServerManager.info(serverId)
     assert(info.addr, 'the started server should be listening')

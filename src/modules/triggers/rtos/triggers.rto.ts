@@ -1,4 +1,4 @@
-import type { Triggers } from '@zanix/database'
+import type { CreateTriggerInput, Triggers, UpdateTriggerInput } from '@zanix/database'
 
 import { BaseRTO, Expose, IsBoolean, IsString } from '@zanix/validator'
 
@@ -22,7 +22,7 @@ export class TriggerServiceModelParamsRTO extends BaseRTO {
  * local `POST /admin/triggers` — the same wire shape, since a proxying request forwards this body
  * to the target service's own admin API unchanged.
  */
-export class CreateTriggerRTO extends BaseRTO {
+export class CreateTriggerRTO extends BaseRTO implements CreateTriggerInput {
   @IsString({ expose: true })
   accessor model!: string
 
@@ -37,7 +37,7 @@ export class CreateTriggerRTO extends BaseRTO {
 
 /** Body validation shared by this proxy's `PUT /triggers/:serviceId/:model` and `@zanix/core`'s
  * own local `PUT /admin/triggers/:model` — see {@link CreateTriggerRTO}. */
-export class UpdateTriggerRTO extends BaseRTO {
+export class UpdateTriggerRTO extends BaseRTO implements UpdateTriggerInput {
   @IsBoolean({ optional: true, expose: true })
   accessor active: boolean | undefined
 

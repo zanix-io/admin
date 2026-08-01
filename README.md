@@ -49,10 +49,13 @@ instance. It's a convenience, not the only supported path: an app that wires
 `@zanix/server`/`@zanix/core`-based bootstrap directly (see [Basic Usage](#-basic-usage)) never
 needs it at all.
 
-Both default to `isInternal: true` — this is `zanix-admin`'s own admin/ops surface, not meant to be
-reachable by an arbitrary public caller — and both accept an `isInternal`/`prefix` override
-(`ZanixAdmin.start({ triggers, templates })`, or the factory's own argument for manual wiring) for a
-deployment platform that genuinely can't isolate an internal server.
+Both are bound to the `'admin'` Application and anchored by default — this is `zanix-admin`'s own
+admin/ops surface, not meant to be reachable by an arbitrary public caller — and both accept a
+`prefix` override via the factory's own argument for manual wiring, plus an `application: 'main'`
+override via `ZanixAdmin.start({ triggers, templates })` for a deployment platform that genuinely
+can't isolate an anchored server (wiring the factories manually instead means wrapping the call in
+`ProgramModule.defineApplication(...)` yourself to get the same effect — see
+[Basic Usage](#-basic-usage)).
 
 ---
 
@@ -137,8 +140,9 @@ See [`docs/service-registry.md`](./docs/service-registry.md) for the full config
 
 `TriggersAggregator` wraps a `ServiceRegistry` with the actual fan-out/proxy logic behind
 `zanix-admin`'s `/triggers` API (`TriggersController`) — `list()` fans out to every registered
-service, `get`/`create`/`update`/`remove` proxy to the one resolved service. Authentication is a
-pluggable seam (the constructor's `clientFactory` argument), not built in yet.
+service's own Discovery snapshot, `get`/`create`/`update`/`remove` proxy to the one resolved
+service's CRUD API. Authentication is a pluggable seam (the constructor's `clientFactory`/
+`discoveryClientFactory` arguments), not built in yet.
 
 See [`docs/triggers-aggregator.md`](./docs/triggers-aggregator.md) for the full method/route
 reference and a real pluggable-auth example.
@@ -147,10 +151,12 @@ reference and a real pluggable-auth example.
 
 ## 📝 Templates API
 
-`TemplatesController` is `zanix-admin`'s **own** templates CRUD API (`/templates`) — unlike
-triggers, this one owns the data. It also exposes a batch, upsert-aware `POST /templates/sync` for
-callers with no local database access of their own (e.g. `@zanix/notifications`'s
-`RemoteTemplateBackend` in Mode C).
+`TemplatesController` is `zanix-admin`'s templates CRUD API (`/templates`) — composed on top of
+`@zanix/notifications`'s own `TemplatesAdminRepository`/`Service` (the real owner of the templates
+schema), the same "compose, don't own" role this package already plays for triggers. It also exposes
+a batch, upsert-aware `POST /templates/sync` that pulls a registered service's code templates via
+its own Discovery endpoint, given just its `serviceId` — typically triggered by a caller with no
+local database access of its own (e.g. `@zanix/notifications`'s `RemoteTemplateBackend` in Mode C).
 
 See [`docs/templates-api.md`](./docs/templates-api.md) for the full CRUD/sync reference.
 
