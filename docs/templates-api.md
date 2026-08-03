@@ -9,21 +9,21 @@ re-exports these exact same symbols rather than redefining them, so the wire sha
 either way.
 
 ```typescript
-import ZanixAdmin from 'jsr:@zanix/admin@[version]'
+import ZanixAdminHub from 'jsr:@zanix/admin@[version]'
 
 // Requires a database connector to be configured (MONGO_URI, TEMPLATES_MODEL_NAME, etc.), same as
 // any @zanix/core-based service with DB-backed templates.
-await ZanixAdmin.start()
+await ZanixAdminHub.start()
 ```
 
 Requires `ADMIN_ROLE`/`ADMIN_TEMPLATES_ROLE` (both defined in this package, and re-exported from
 `@zanix/core` for a business service's own use), and accepts either a human admin's `type: 'user'`
 token or a machine caller's `type: 'api'` one — same as `@zanix/core`'s own admin APIs. Bound to the
 `'admin'` Application, anchored (id-prefixed) whenever `ADMIN_SERVER_ID` is set — there is no
-auto-generated anchored id — (see `createTemplatesController`/`ZanixAdmin.start`'s own `templates`
-option to change the route prefix, or `templates: { application: 'main' }` to mount it on the
-default Application's unprefixed server instead). `AuthTokenValidation` and the role gate remain the
-load-bearing protection either way.
+auto-generated anchored id — (see `createTemplatesController`/`ZanixAdminHub.start`'s own
+`templates` option to change the route prefix, or `templates: { application: 'main' }` to mount it
+on the default Application's unprefixed server instead). `AuthTokenValidation` and the role gate
+remain the load-bearing protection either way.
 
 ---
 
@@ -33,26 +33,38 @@ Alongside the CRUD routes above, `TemplatesController` also exposes `POST /templ
 package's own `syncTemplatesFromRegisteredService` — cross-service orchestration, not part of
 `TemplatesAdminService`, since it depends on the `ServiceRegistry`/Discovery-client concepts this
 package owns, not `@zanix/notifications`) — a batch, upsert-aware endpoint for pulling a registered
-service's current code-defined template set, rather than accepting it as a request body. Typically
-triggered by a caller with **no local database access of its own**, e.g. `@zanix/notifications`'s
+service's current template set, rather than accepting it as a request body. Typically triggered by a
+caller with **no local database access of its own**, e.g. `@zanix/notifications`'s
 `RemoteTemplateBackend` (Mode C, see its own `docs/templates.md#mode-c-remote-only-templates`) — but
 instead of pushing its templates as a payload, it just tells this endpoint _which registered
 service_ to pull from:
 
 ```typescript
-// Body: { serviceId: string }
+// Body: { service_id: string }
 // Response: { seeded: number; resynced: number }
 ```
 
-`serviceId` is looked up in the shared `ServiceRegistry` (see
+`service_id` is looked up in the shared `ServiceRegistry` (see
 [Service Registry](./service-registry.md) — the same registry `TriggersAggregator` uses), resolving
-that service's own base URL. This package then fetches that service's
-`/.well-known/zanix/code-templates` Discovery snapshot (see `@zanix/notifications`'s
-`defineCodeTemplatesDiscovery`, which the target service must have registered itself) and reconciles
-the fetched entries against this service's own database using the same `planCodeSync`
-(`@zanix/helpers`) rules `LocalTemplateBackend` applies locally — seed a brand-new `{channel,name}`,
-resync one nobody's edited directly since the last sync, leave a manually-edited one alone, and flip
-an entry no longer in the fetched set to `source: 'database'` (never delete it).
+that service's own base URL. This package then pulls from whichever of two Discovery resources that
+service exposes, **preferring the richer one**:
+
+1. **`/.well-known/zanix/templates`** — that service's own DB-backed Discovery (this package's own,
+   only present when the target has `admin` + DB-backed templates enabled) — its real,
+   currently-live content, including any manual edit. Tried first.
+2. **`/.well-known/zanix/code-templates`** — `@zanix/notifications`'s own Discovery
+   (`defineCodeTemplatesDiscovery`) — the static in-code catalog only. Used whenever resource 1
+   specifically isn't reachable (not registered at all — the target has no DB-backed templates — or
+   this service's own credentials aren't authorized for it) — present on any service using
+   `@zanix/notifications`, regardless of whether it also has DB-backed templates.
+
+Either way, the fetched entries are reconciled against this service's own database using the same
+`planCodeSync` (`@zanix/helpers`) rules `LocalTemplateBackend` applies locally — seed a brand-new
+`{channel,name}`, resync one nobody's edited directly since the last sync, leave a manually-edited
+one alone, and flip an entry no longer in the fetched set to `source: 'database'` (never delete it).
+This merge doesn't care which of the two resources the entries came from — pulling a target's real,
+DB-backed content is simply treated as this service's own authoritative default, the same way its
+code catalog always has been.
 
 This is **additive**, not a replacement for `create()`/`update()` — those keep their existing
 throw-on-conflict, human-facing CRUD semantics unchanged. It is also safe to call concurrently from

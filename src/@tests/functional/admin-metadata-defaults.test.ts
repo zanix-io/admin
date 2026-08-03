@@ -19,7 +19,7 @@ Deno.test({
   name:
     'defineAdminMetadata() default env: registers /admin/triggers + its Discovery, skips /admin/templates',
   fn: async () => {
-    await defineAdminMetadata('metadata-defaults-test')
+    await defineAdminMetadata()
 
     const [serverId] = await bootstrapServers({
       rest: { application: ADMIN_APPLICATION, id: 'metadata-defaults-test' },

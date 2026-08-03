@@ -27,6 +27,7 @@ import {
 // `guards` option) — mirroring the exact guard configuration each real file uses, without needing a
 // live MongoDB, since these plain test routes never touch a repository.
 stub(console, 'info')
+stub(console, 'warn')
 
 Deno.test({
   sanitizeOps: false,

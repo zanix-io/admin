@@ -7,11 +7,12 @@
     "jsr:@std/assert@0.217": "0.217.0",
     "jsr:@std/assert@0.224": "0.224.0",
     "jsr:@std/assert@^1.0.10": "1.0.19",
+    "jsr:@std/assert@^1.0.15": "1.0.19",
     "jsr:@std/async@^1.0.0-rc.1": "1.5.0",
     "jsr:@std/async@^1.0.9": "1.5.0",
     "jsr:@std/bytes@^1.0.2": "1.0.6",
     "jsr:@std/cli@~0.224.7": "0.224.7",
-    "jsr:@std/data-structures@^1.0.6": "1.1.1",
+    "jsr:@std/data-structures@^1.0.6": "1.1.2",
     "jsr:@std/encoding@1": "1.0.11",
     "jsr:@std/encoding@1.0.0-rc.2": "1.0.0-rc.2",
     "jsr:@std/encoding@^1.0.5": "1.0.11",
@@ -36,21 +37,21 @@
     "jsr:@std/path@^1.1.5": "1.1.6",
     "jsr:@std/streams@~0.224.5": "0.224.5",
     "jsr:@std/testing@1.0.9": "1.0.9",
-    "jsr:@zanix/auth@0.5": "0.5.0",
-    "jsr:@zanix/datamaster@0.8": "0.8.1",
-    "jsr:@zanix/datamaster@~0.8.1": "0.8.1",
-    "jsr:@zanix/notifications@~0.2.3": "0.2.3",
-    "jsr:@zanix/server@2": "2.1.1",
-    "jsr:@zanix/server@^2.1.1": "2.1.1",
-    "jsr:@zanix/utils@*": "2.4.3",
-    "jsr:@zanix/utils@2": "2.4.3",
-    "jsr:@zanix/utils@2.4": "2.4.3",
-    "jsr:@zanix/utils@^2.4.3": "2.4.3",
+    "jsr:@zanix/auth@0.6": "0.6.0",
+    "jsr:@zanix/datamaster@1": "1.1.0",
+    "jsr:@zanix/datamaster@^1.1.0": "1.1.0",
+    "jsr:@zanix/notifications@0.3": "0.3.0",
+    "jsr:@zanix/server@3": "3.1.0",
+    "jsr:@zanix/server@^3.1.0": "3.1.0",
+    "jsr:@zanix/utils@*": "2.4.5",
+    "jsr:@zanix/utils@2": "2.4.5",
+    "jsr:@zanix/utils@2.4": "2.4.5",
+    "jsr:@zanix/utils@^2.4.5": "2.4.5",
     "npm:esbuild@0.20.2": "0.20.2",
     "npm:graphql@16": "16.14.2",
     "npm:handlebars@^4.7.8": "4.7.9",
     "npm:javascript-obfuscator@^4.0.2": "4.2.2",
-    "npm:mongoose@8": "8.24.1",
+    "npm:mongoose@8": "8.24.2",
     "npm:redis@^5.9.0": "5.12.1"
   },
   "jsr": {
@@ -103,8 +104,8 @@
     "@std/cli@0.224.7": {
       "integrity": "654ca6477518e5e3a0d3fabafb2789e92b8c0febf1a1d24ba4b567aba94b5977"
     },
-    "@std/data-structures@1.1.1": {
-      "integrity": "7e1fcf19771fb9c6dbcd7f65039d6d42ef8dc023cfbc0c4cdc74b24e09229380"
+    "@std/data-structures@1.1.2": {
+      "integrity": "2471377c9e0051f9ec34e57d0ebd0ad133a5a889677446ec6ba9938e4e102918"
     },
     "@std/encoding@1.0.0-rc.2": {
       "integrity": "160d7674a20ebfbccdf610b3801fee91cf6e42d1c106dd46bbaf46e395cd35ef"
@@ -191,47 +192,48 @@
         "jsr:@std/path@^1.0.8"
       ]
     },
-    "@zanix/auth@0.5.0": {
-      "integrity": "a69c3c66e3ae24b5e9d6f67e9b959a30f5fe33657f068d044678ecec4d0c9e7c",
+    "@zanix/auth@0.6.0": {
+      "integrity": "3f597abb346b7eecb5b8f06dfe24ab081a7a8e688326fd6388751d06fe7458bf",
       "dependencies": [
-        "jsr:@zanix/server@2",
+        "jsr:@zanix/server@3",
         "jsr:@zanix/utils@2",
         "jsr:@zanix/utils@2.4"
       ]
     },
-    "@zanix/datamaster@0.8.1": {
-      "integrity": "ba59f7abe1baad8aaf9cd41ea37800d402c475193b87e2b1a43dd27d6fd805bf",
+    "@zanix/datamaster@1.1.0": {
+      "integrity": "f996bb2840ec7d8a6cff293aa8d1f2c0d05b63ec5232b8601225366f9204fcd7",
       "dependencies": [
         "jsr:@db/sqlite",
-        "jsr:@zanix/server@2",
+        "jsr:@zanix/server@3",
         "jsr:@zanix/utils@2",
         "npm:mongoose",
         "npm:redis"
       ]
     },
-    "@zanix/notifications@0.2.3": {
-      "integrity": "9662d4b98109dbf9b4b61115539aee2d2e4dfb379e1544a09a85494d0363ca82",
+    "@zanix/notifications@0.3.0": {
+      "integrity": "069716e1cf2283f874bc70529b0ec6d7c78a23e18b686111b4c48a8546c2b20e",
       "dependencies": [
-        "jsr:@zanix/datamaster@0.8",
-        "jsr:@zanix/server@2",
+        "jsr:@zanix/auth",
+        "jsr:@zanix/datamaster@1",
+        "jsr:@zanix/server@3",
         "jsr:@zanix/utils@2",
         "npm:handlebars"
       ]
     },
-    "@zanix/server@2.1.1": {
-      "integrity": "3ea72ff55eb1578b2cd861638955353cc18e2684ea27c05a29147b83a14eec14",
+    "@zanix/server@3.1.0": {
+      "integrity": "a0a2ef88daab0d6a0c3a9420bff5c21282fd2694dc8005f16af2a575fc808e2b",
       "dependencies": [
         "jsr:@std/http",
         "jsr:@std/path@0.224",
-        "jsr:@zanix/server@^2.1.1",
+        "jsr:@zanix/server@^3.1.0",
         "jsr:@zanix/utils@2",
         "jsr:@zanix/utils@2.4",
         "npm:graphql",
         "npm:redis"
       ]
     },
-    "@zanix/utils@2.4.3": {
-      "integrity": "a03c356b290fba79d89277950d010d0e8931282a6e6c2d12b1a62c60a3d8f665",
+    "@zanix/utils@2.4.5": {
+      "integrity": "1c63a97018c29acdba39aeea9f583cae53f260be6a4fe36755a8c8e4a2fba3dc",
       "dependencies": [
         "jsr:@luca/esbuild-deno-loader",
         "jsr:@std/fmt@0.224",
@@ -388,8 +390,8 @@
     "@javascript-obfuscator/estraverse@5.4.0": {
       "integrity": "sha512-CZFX7UZVN9VopGbjTx4UXaXsi9ewoM1buL0kY7j1ftYdSs7p2spv9opxFjHlQ/QGTgh4UqufYqJJ0WKLml7b6w=="
     },
-    "@mongodb-js/saslprep@1.4.12": {
-      "integrity": "sha512-QAfAMwNgnYxZ2C6D1HgeP7Gc4i/uvJRim415PCIL9ptRxWMNbWeLBYb2/9R4pGKny/s1FVu2JA2cxCUBUOggrA==",
+    "@mongodb-js/saslprep@1.4.13": {
+      "integrity": "sha512-E3Sv4eCYAlKYUTx8S3ioQcDUscOif+8zZ5OnW1IzJ+Tt+EO+ke8mn+Y3FX6N1H79picwbdOavVOb1jPi2EOyrg==",
       "dependencies": [
         "sparse-bitfield"
       ]
@@ -502,8 +504,8 @@
     "balanced-match@1.0.2": {
       "integrity": "sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw=="
     },
-    "brace-expansion@1.1.16": {
-      "integrity": "sha512-IDw48K2/2kRkg9LdJxurvq3lV3aBgq0REY89duEqFRthjlPdXHKMj7EnQOXVckxzgisinf3nHfrcE2FufFLXMw==",
+    "brace-expansion@1.1.18": {
+      "integrity": "sha512-Edep/X9fGqVNmzKBVsDYIOtD+z1tuezV70LBjdCst9Tqu76lsnvRiZ6oTic1n+/BIwX6QDGAO94PN4N2SADvtw==",
       "dependencies": [
         "balanced-match",
         "concat-map"
@@ -719,8 +721,8 @@
     "fast-levenshtein@2.0.6": {
       "integrity": "sha512-DCXu6Ifhqcks7TZKY3Hxp3y6qphY5SJZmrWMDrKcERSOXWQdMhU9Ig/PYrzyw/ul9jOIyh0N4M0tbC5hodg8dw=="
     },
-    "fast-uri@3.1.4": {
-      "integrity": "sha512-8JnbkQ4juDyvYs4mgFGQqg4yCYtFDtUtmp2QIQq11ZZe5CFQ5wcqm1rqDgAh/QdMySuBnPzMUiJUNZG5N/AiQw=="
+    "fast-uri@3.1.5": {
+      "integrity": "sha512-gHwA1O9LDIcKunMKhObS/HimwtehO1nPUECKAu5TpKgaO19fcWEl4bliWe1jWxVFvIXztJjjQ4L8XQ1EU9f7Jw=="
     },
     "for-each@0.3.5": {
       "integrity": "sha512-dKx12eRCVIzqCxFGplyFKJMPvLEWgmNtUrpTiJIR5u97zEhRG8ySrtboPHZXx7daLxQVrl643cTzbab2tkQjxg==",
@@ -902,8 +904,8 @@
         "type-check"
       ]
     },
-    "libphonenumber-js@1.13.9": {
-      "integrity": "sha512-VNS5vWMM7r0P66BYv+TQJATxExEgLxN+34hfHDVhDkUsGAE4cRg0shCNSLTXNKm7nIUscC7AfB51TjxEeF7msQ=="
+    "libphonenumber-js@1.13.10": {
+      "integrity": "sha512-xJxrdqvbl2rtn2MaUJrUejz8J7/uZNC0V77oks2LxYrO/+ZtVpRmz+fEQMuu6VusnEB1fmpByiLS1WXecOnAnw=="
     },
     "math-intrinsics@1.1.0": {
       "integrity": "sha512-/IXtbwEk5HTPyEwyKX6hGkYXxM9nbj64B+ilVJnC/R6B0pH5G4V3b0pVbL7DBj4tkhBAppbQUlf6F6Xl9LHu1g=="
@@ -950,8 +952,8 @@
         "mongodb-connection-string-url"
       ]
     },
-    "mongoose@8.24.1": {
-      "integrity": "sha512-UpHBA0l5kHyKJQFjmBaFYQFo5sgz1DK0TRqDkOyBLYbqiIbKKhIvBpHWBXqeo0rgW4kGI1UhhAw+kTQZoj1BdA==",
+    "mongoose@8.24.2": {
+      "integrity": "sha512-5+H3MSHNJCcr9M+lVplekrZ4/Dyn3N1dOpvgn9gMwvHJhunc4G8SQcBVd/btBQoVdspVNPjx8Pw03YWBv6uTJg==",
       "dependencies": [
         "bson",
         "kareem",
@@ -1194,11 +1196,11 @@
       "jsr:@std/assert@0.224",
       "jsr:@std/path@0.224",
       "jsr:@std/testing@1.0.9",
-      "jsr:@zanix/auth@0.5",
-      "jsr:@zanix/datamaster@~0.8.1",
-      "jsr:@zanix/notifications@~0.2.3",
-      "jsr:@zanix/server@^2.1.1",
-      "jsr:@zanix/utils@^2.4.3"
+      "jsr:@zanix/auth@0.6",
+      "jsr:@zanix/datamaster@^1.1.0",
+      "jsr:@zanix/notifications@0.3",
+      "jsr:@zanix/server@^3.1.0",
+      "jsr:@zanix/utils@^2.4.5"
     ]
   }
 }

@@ -19,12 +19,27 @@ export const ADMIN_TEMPLATES_ROLE = 'zanix:admin:templates'
 export { ADMIN_PROTOCOL_SUPPORTED_VERSIONS, ADMIN_PROTOCOL_VERSION } from './protocol/constants.ts'
 
 /**
- * Default Application {@link defineAdminMetadata}'s built-in controllers (`/admin/triggers`,
- * `/admin/templates`, `/admin/service-token`) compose under, and {@link start} (`ZanixAdmin`'s own
- * reference bootstrap) activates as an anchored server — see `@zanix/core`'s `docs/admin-apis.md`'s "Scope" section
- * for what sharing this Application with an app's own routes implies.
+ * Default Application `defineAdminMetadata`'s (`modules/metadata.ts`) built-in controllers
+ * (`/admin/triggers`, `/admin/templates`, `/admin/service-token`) compose under — a business
+ * service's own LOCAL admin API, embedded via `@zanix/core`'s `admin` option. See
+ * `@zanix/core`'s `docs/admin-apis.md`'s "Scope" section for what sharing this Application with an
+ * app's own routes implies. Distinct from {@link ADMIN_HUB_APPLICATION}, which
+ * `ZanixAdminHub.start()`'s own aggregator routes compose under — the two are independent route
+ * sets that may safely coexist in one process.
  */
 export const ADMIN_APPLICATION = 'admin'
+
+/**
+ * Default Application `ZanixAdminHub.start()`'s own `defineAdminMetadata` (`modules/start.ts`)
+ * composes its triggers/templates aggregator controllers under — distinct from
+ * {@link ADMIN_APPLICATION}, which is reserved for the embedded, business-service-side admin API.
+ * These are two conceptually different route sets (a business service's own local CRUD vs. this
+ * package's central aggregator/proxy) that happen to share a package — giving them distinct
+ * Application names keeps their route registries logically distinguishable, and (together with
+ * `@zanix/server`'s boot-session isolation) lets both coexist safely in the same process, even
+ * without a sequential `await` between `Zanix.start({ admin: true })` and `ZanixAdminHub.start()`.
+ */
+export const ADMIN_HUB_APPLICATION = 'admin-hub'
 
 /**
  * Env var overriding which Application `/admin/triggers` is composed under — defaults to

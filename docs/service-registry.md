@@ -21,7 +21,7 @@ authenticating to it (see `@zanix/auth`'s `exchangeServiceCredential`).
 (pulling a service's `/.well-known/zanix/code-templates` Discovery snapshot for
 `POST /templates/sync`) both resolve the **same** installed instance via `getServiceRegistry`,
 rather than each holding an independent one that could drift out of sync — install it once with
-`setServiceRegistry` before `ZanixAdmin.start()`:
+`setServiceRegistry` before `ZanixAdminHub.start()`:
 
 ```typescript
 import { ServiceRegistry, setServiceRegistry } from 'jsr:@zanix/admin@[version]'
@@ -68,12 +68,12 @@ const results = await checkServiceRegistryReachability()
 Every per-entry failure is caught internally (`Promise.all` over already-caught results) — this
 function can never throw or hang its caller, and logs a warning for anything but `'ok'`.
 
-`ZanixAdmin.start()`'s own `validateRegistry` option (default `false`) calls this fire-and-forget,
-right after its servers are already listening, so a temporarily-down registered peer never fails or
-delays boot:
+`ZanixAdminHub.start()`'s own `validateRegistry` option (default `false`) calls this
+fire-and-forget, right after its servers are already listening, so a temporarily-down registered
+peer never fails or delays boot:
 
 ```typescript
-await ZanixAdmin.start({ validateRegistry: true })
+await ZanixAdminHub.start({ validateRegistry: true })
 ```
 
 For a deploy-pipeline smoke test instead of (or alongside) this, script against the returned array —

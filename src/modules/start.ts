@@ -1,23 +1,41 @@
 import type { BootstrapServerOptions, ServerID } from '@zanix/server'
+import type { ServiceAuthClientOptions } from '@zanix/auth'
 
 import {
   bootstrapServers,
+  createStartLifecycleGuard,
   DEFAULT_APPLICATION,
-  guardSingleAdminRegistration,
   ProgramModule,
-  releaseAdminRegistration,
-  resolveAdminServerId,
-  resolvePreviousAdminServerId,
+  resolveApplicationServerId,
+  resolvePreviousApplicationServerId,
   webServerManager,
 } from '@zanix/server'
 
 import logger from '@zanix/logger'
-import { ADMIN_APPLICATION } from '../utils/constants.ts'
+import { ADMIN_HUB_APPLICATION } from '../utils/constants.ts'
 import type { TemplatesControllerOptions } from './templates/templates.handler.ts'
 import type { TriggersControllerOptions } from './triggers/triggers.handler.ts'
 import { checkServiceRegistryReachability } from './registry/reachability.ts'
+import { getServiceRegistry } from './registry/registry.ts'
+import { createServiceRegistryAuthHeaders } from './registry/auth.ts'
+import { setTriggersAggregator, TriggersAggregator } from './triggers/triggers.aggregator.ts'
+import { TriggersAdminClient } from './triggers/triggers.client.ts'
+import { DiscoveryAdminClient } from './discovery/discovery.client.ts'
+import { setTemplatesDiscoveryClientFactory } from './templates/templates-sync.ts'
 
 let servers: ServerID[] = []
+
+/**
+ * Guards against overlapping/repeated `start()` calls — see `@zanix/server`'s
+ * `createStartLifecycleGuard` for the exact races this covers and why. No `overlapNote`: unlike
+ * `@zanix/core`'s own `start.ts`, this package has no `admin`-shaped option whose loss under a race
+ * is worth calling out specifically.
+ */
+const lifecycleGuard = createStartLifecycleGuard({
+  startLabel: 'ZanixAdminHub.start()',
+  stopLabel: 'ZanixAdminHub.stop()',
+  source: 'zanix-admin',
+})
 
 // Kept alive deliberately: a class produced by a factory and only ever referenced by a `Promise`'s
 // resolved value has no other strong reference once that `Promise` is discarded —
@@ -38,7 +56,7 @@ const registeredControllers: unknown[] = []
  *   need, and the `TemplateProvider` + templates model `TemplatesAdminService` reads through.
  * - `createTriggersController(triggers)` / `createTemplatesController(templates)` — building (and
  *   thereby registering, via their `@Controller` decorator) each route, wrapped in
- *   `ProgramModule.defineApplication(...)` so it's attributed to {@link ADMIN_APPLICATION} by
+ *   `ProgramModule.defineApplication(...)` so it's attributed to {@link ADMIN_HUB_APPLICATION} by
  *   default, or {@link DEFAULT_APPLICATION} (see `docs/HANDLERS.md`'s "Applications" section) when
  *   its own `application` option says so; `false` skips that controller entirely.
  *   `bootstrapServers` below only ever serves what's registered here.
@@ -54,7 +72,7 @@ async function defineAdminMetadata(
   ]
 
   if (triggers !== false) {
-    const { application = ADMIN_APPLICATION, ...options } = triggers
+    const { application = ADMIN_HUB_APPLICATION, ...options } = triggers
     imports.push(
       import('./triggers/triggers.handler.ts').then(async ({ createTriggersController }) => {
         let controller: unknown
@@ -66,7 +84,7 @@ async function defineAdminMetadata(
     )
   }
   if (templates !== false) {
-    const { application = ADMIN_APPLICATION, ...options } = templates
+    const { application = ADMIN_HUB_APPLICATION, ...options } = templates
     imports.push(
       import('./templates/templates.handler.ts').then(async ({ createTemplatesController }) => {
         let controller: unknown
@@ -90,22 +108,22 @@ async function defineAdminMetadata(
  * Application {@link start} never activates a Runtime for, since it only ever calls
  * `bootstrapServers` for these two.
  */
-export type AdminStartApplication = typeof DEFAULT_APPLICATION | typeof ADMIN_APPLICATION
+export type AdminStartApplication = typeof DEFAULT_APPLICATION | typeof ADMIN_HUB_APPLICATION
 
 /** Options accepted by {@link start}, alongside whatever `@zanix/server`'s `bootstrapServers` takes. */
 export type StartOptions = BootstrapServerOptions & {
   /**
    * Options for the triggers route, or `false` to skip registering it entirely. `application:
    * 'main'` mounts it on the default Application's own public, unprefixed server instead of
-   * {@link ADMIN_APPLICATION}'s own server (the default choice — anchored, id-prefixed, whenever
-   * `ADMIN_SERVER_ID` is set) — see {@link start}'s own doc.
+   * {@link ADMIN_HUB_APPLICATION}'s own server (the default choice — anchored, id-prefixed, whenever
+   * `ADMIN_HUB_SERVER_ID` is set) — see {@link start}'s own doc.
    */
   triggers?: false | (TriggersControllerOptions & { application?: AdminStartApplication })
   /**
    * Options for the templates route, or `false` to skip registering it entirely. `application:
    * 'main'` mounts it on the default Application's own public, unprefixed server instead of
-   * {@link ADMIN_APPLICATION}'s own server (the default choice — anchored, id-prefixed, whenever
-   * `ADMIN_SERVER_ID` is set) — see {@link start}'s own doc.
+   * {@link ADMIN_HUB_APPLICATION}'s own server (the default choice — anchored, id-prefixed, whenever
+   * `ADMIN_HUB_SERVER_ID` is set) — see {@link start}'s own doc.
    */
   templates?: false | (TemplatesControllerOptions & { application?: AdminStartApplication })
   /**
@@ -117,6 +135,21 @@ export type StartOptions = BootstrapServerOptions & {
    * caught internally.
    */
   validateRegistry?: boolean
+  /**
+   * This hub's own identity for authenticating OUTBOUND to every registered service — when given,
+   * `start()` installs a `TriggersAggregator`/`TemplatesDiscoveryClientFactory` that sign+exchange+
+   * cache a real credential per target (via `@zanix/auth`'s `createServiceAuthClient`, adapted for
+   * `ServiceRegistryEntry` by `createServiceRegistryAuthHeaders`) instead of the unauthenticated
+   * default, which only works against a target that doesn't actually require one.
+   *
+   * This is the common-case shortcut — equivalent to calling `setTriggersAggregator`/
+   * `setTemplatesDiscoveryClientFactory` yourself with `createServiceRegistryAuthHeaders`. Skip
+   * this option and call those directly instead for a custom `ServiceRegistry`, partial-failure
+   * tolerance, or different credentials for CRUD vs. Discovery reads — this option and a manual
+   * `setTriggersAggregator` call are mutually exclusive: whichever runs LAST before the first real
+   * `TriggersController`/`TemplatesController` request wins, so don't do both.
+   */
+  auth?: ServiceAuthClientOptions
 }
 
 /**
@@ -127,15 +160,21 @@ export type StartOptions = BootstrapServerOptions & {
  * `createTemplatesController` directly and bootstrapping them through its own `@zanix/server`/
  * `@zanix/core` setup works just as well — this is a convenience, not the only supported path.
  *
- * **Never call this in the same process as `Zanix.start()` with its own `admin` option enabled**
- * — both independently call `bootstrapServers()` against the same process-global metadata
- * registry, and running both corrupts it (one's cleanup can wipe routes/resolvers the other
- * registered before they're ever served). A runtime guard (`guardSingleAdminRegistration`)
- * throws if you do; use one or the other per process.
+ * **Safe to run in the same process as `Zanix.start()` with its own `admin` option enabled** — this
+ * package's two route sets are independent: `Zanix.start({ admin: true })` composes a business
+ * service's own LOCAL admin CRUD (`/admin/triggers`, `/admin/templates`, `/admin/service-token`)
+ * under `ADMIN_APPLICATION` (`../utils/constants.ts`), while this function composes its own central aggregator/proxy
+ * (`/triggers`, `/templates`) under {@link ADMIN_HUB_APPLICATION} — two distinct Applications, so
+ * neither's routes leak onto the other's server. `@zanix/server`'s boot-session isolation (see
+ * `bootstrapServers`' own doc) further ensures that even firing both calls without an `await`
+ * between them — e.g. `Zanix.start(opts); ZanixAdminHub.start(otherOpts)`, letting them register and
+ * boot concurrently — can never wipe one sequence's not-yet-served routes out from under the other.
+ * If both are anchored (`ADMIN_SERVER_ID` and `ADMIN_HUB_SERVER_ID` both set), each gets its own
+ * stable prefix, so they can even share one port.
  *
- * Both controllers default to {@link ADMIN_APPLICATION} (see `docs/HANDLERS.md`'s "Applications"
+ * Both controllers default to {@link ADMIN_HUB_APPLICATION} (see `docs/HANDLERS.md`'s "Applications"
  * section), so by default only that one server starts — anchored (id-prefixed) whenever
- * `ADMIN_SERVER_ID` is set, a plain unprefixed server otherwise (there is no auto-generated
+ * `ADMIN_HUB_SERVER_ID` is set, a plain unprefixed server otherwise (there is no auto-generated
  * anchored id). A "public" REST server (the default Application, always unprefixed) only gets
  * bootstrapped when `triggers`/`templates` is explicitly configured with `application: 'main'` —
  * see the `wantsPublicRoute` check in the implementation for why this isn't attempted
@@ -153,9 +192,61 @@ export type StartOptions = BootstrapServerOptions & {
 export const start = async (
   options: StartOptions = {},
 ): Promise<ServerID[]> => {
-  guardSingleAdminRegistration('admin')
+  lifecycleGuard.guardReentry()
 
-  const { triggers = {}, templates = {}, validateRegistry = false, ...serverOptions } = options
+  try {
+    // The whole sequence below (composition + every `bootstrapServers()` call) runs under one
+    // shared boot session (see `@zanix/server`'s `BootSessionContainer`) — so this call's own last
+    // `bootstrapServers()` finalize preserves whichever Applications an independent,
+    // concurrently-running sequence (e.g. `Zanix.start()` fired without an `await` in between)
+    // currently owns, never wiping its not-yet-served routes.
+    servers = await ProgramModule.runBootSession(() => startSequence(options))
+
+    if (!servers.length) {
+      logger.warn(
+        "No server was started — no route was registered (unexpected for this package's own " +
+          'built-in controllers; check that @zanix/admin was imported correctly).',
+        'noSave',
+      )
+    }
+
+    lifecycleGuard.markRunning()
+    return servers
+  } finally {
+    lifecycleGuard.clearStarting()
+  }
+}
+
+async function startSequence(options: StartOptions): Promise<ServerID[]> {
+  const { triggers = {}, templates = {}, validateRegistry = false, auth, ...serverOptions } =
+    options
+
+  if (auth) {
+    const authHeaders = createServiceRegistryAuthHeaders(auth)
+    const registry = getServiceRegistry()
+    setTriggersAggregator(
+      new TriggersAggregator(
+        registry,
+        async (service) =>
+          new TriggersAdminClient({
+            baseUrl: service.adminBaseUrl,
+            headers: await authHeaders(service),
+          }),
+        async (service) =>
+          new DiscoveryAdminClient({
+            baseUrl: service.adminBaseUrl,
+            headers: await authHeaders(service),
+          }),
+      ),
+    )
+    setTemplatesDiscoveryClientFactory(
+      async (service) =>
+        new DiscoveryAdminClient({
+          baseUrl: service.adminBaseUrl,
+          headers: await authHeaders(service),
+        }),
+    )
+  }
 
   await defineAdminMetadata(triggers, templates)
 
@@ -178,50 +269,44 @@ export const start = async (
     ? await bootstrapServers(serverOptions, { finalize: false })
     : []
 
-  // `id`/`previousId` mirror `@zanix/core`'s own `start.ts` — both resolve them from the same
-  // `ADMIN_SERVER_ID`/`ADMIN_SERVER_ID_PREVIOUS` env vars via the same shared helpers, so a caller
-  // of either gets the same behavior (previously only `@zanix/core`'s did; this one got a fresh
-  // random id every restart). Leaving `ADMIN_SERVER_ID` unset gives a plain, unprefixed admin
-  // server — there is no auto-generated anchored id.
-  const adminId = serverOptions.rest?.id ?? resolveAdminServerId('rest')
+  // `id`/`previousId` mirror `@zanix/core`'s own `start.ts` — both resolve them from an
+  // env var via the same shared helper, so a caller of either gets the same behavior (previously
+  // only `@zanix/core`'s did; this one got a fresh random id every restart). Uses its own
+  // `ADMIN_HUB_SERVER_ID`/`ADMIN_HUB_SERVER_ID_PREVIOUS` env vars, distinct from the embedded local
+  // admin's `ADMIN_SERVER_ID` (see `ADMIN_HUB_APPLICATION`'s own doc) — so both can be anchored at
+  // once without colliding on the same prefix if they ever share a port. Leaving it unset gives a
+  // plain, unprefixed admin server — there is no auto-generated anchored id.
+  const adminId = serverOptions.rest?.id ??
+    resolveApplicationServerId(ADMIN_HUB_APPLICATION, 'rest')
   const adminServers = await bootstrapServers({
     ...serverOptions,
     rest: {
       ...serverOptions.rest,
       id: adminId,
-      previousId: serverOptions.rest?.previousId ?? resolvePreviousAdminServerId('rest'),
-      application: ADMIN_APPLICATION,
+      previousId: serverOptions.rest?.previousId ??
+        resolvePreviousApplicationServerId(ADMIN_HUB_APPLICATION, 'rest'),
+      application: ADMIN_HUB_APPLICATION,
       // Unanchored (no `adminId`), this server would otherwise fall back to `bootstrapServers`'s
       // own generic `'api'` default — the SAME default a "public" server (`wantsPublicRoute`
-      // above) uses. Sharing a port with no `ADMIN_SERVER_ID` set would then silently collide:
+      // above) uses. Sharing a port with no `ADMIN_HUB_SERVER_ID` set would then silently collide:
       // the second `create()` call's handler would clobber the first's at the same dispatch key.
       // Giving this server its own distinct default prefix keeps it safe to share a port with a
       // public server even without opting into anchoring — only applied when unanchored; an
       // anchored server's own id is already enough to avoid the collision, and an explicit caller
       // `globalPrefix` (if any) always wins regardless.
-      globalPrefix: serverOptions.rest?.globalPrefix ?? (adminId ? undefined : 'admin'),
+      globalPrefix: serverOptions.rest?.globalPrefix ?? (adminId ? undefined : 'admin-hub'),
     },
   })
-
-  servers = [...publicServers, ...adminServers]
-
-  if (!servers.length) {
-    logger.warn(
-      "No server was started — no route was registered (unexpected for this package's own " +
-        'built-in controllers; check that @zanix/admin was imported correctly).',
-      'noSave',
-    )
-  }
 
   // Fire-and-forget, after every server is already listening — a temporarily-down registered peer
   // must never fail or delay this bootstrap; every per-entry failure is already caught internally.
   if (validateRegistry) checkServiceRegistryReachability()
 
-  return servers
+  return [...publicServers, ...adminServers]
 }
 
 /** Stops every server {@link start} started. */
 export const stop = async (): Promise<void> => {
+  lifecycleGuard.markStopped()
   await webServerManager.stop(servers)
-  releaseAdminRegistration('admin')
 }

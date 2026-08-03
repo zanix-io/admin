@@ -19,7 +19,7 @@ Deno.test({
   fn: async () => {
     Deno.env.set(TEMPLATES_MODEL_ENV, 'zanix-templates-test')
     Deno.env.set(DATABASE_TEMPLATES_ENV, 'false')
-    await defineAdminMetadata('metadata-templates-db-disabled-test')
+    await defineAdminMetadata()
     Deno.env.delete(TEMPLATES_MODEL_ENV)
     Deno.env.delete(DATABASE_TEMPLATES_ENV)
 

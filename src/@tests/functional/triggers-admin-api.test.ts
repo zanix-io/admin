@@ -5,7 +5,7 @@ import { createTriggersAdminController } from 'modules/triggers/local-triggers.h
 
 // The real, full-HTTP-dispatch home for a business service's own `/admin/triggers` — moved here
 // from `@zanix/core`'s own functional tests, since this controller is fully owned and tested by
-// this package now. Booted directly via `bootstrapServers`, not `ZanixAdmin.start()`, since that
+// this package now. Booted directly via `bootstrapServers`, not `ZanixAdminHub.start()`, since that
 // entrypoint wires this package's own `/triggers` aggregator (`triggers.handler.ts`), not this
 // per-service controller — it's a `@zanix/core`-side concern to register this one (see `core`'s
 // `defineAdminMetadata`). Only the HTTP-dispatch/auth behavior is covered here; the CRUD-forwarding

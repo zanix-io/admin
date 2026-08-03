@@ -1,8 +1,8 @@
 import { assertEquals } from '@std/assert'
 import { stub } from '@std/testing/mock'
-import ZanixAdmin from '../../../mod.ts'
+import ZanixAdminHub from '../../../mod.ts'
 
-// See `start.test.ts`'s own note: only one `ZanixAdmin.start()` test per file.
+// See `start.test.ts`'s own note: only one `ZanixAdminHub.start()` test per file.
 
 stub(console, 'info')
 stub(console, 'warn')
@@ -11,16 +11,16 @@ Deno.test({
   sanitizeOps: false,
   sanitizeResources: false,
   name:
-    "ZanixAdmin.start() honors ADMIN_SERVER_ID for a stable id, the same way @zanix/core's start() does",
+    "ZanixAdminHub.start() honors its own ADMIN_HUB_SERVER_ID for a stable id, distinct from @zanix/core's ADMIN_SERVER_ID",
   fn: async () => {
-    Deno.env.set('ADMIN_SERVER_ID', 'custom-hub')
+    Deno.env.set('ADMIN_HUB_SERVER_ID', 'custom-hub')
 
     try {
-      const servers = await ZanixAdmin.start()
+      const servers = await ZanixAdminHub.start()
       assertEquals(servers[0], 'custom-hub-rest')
-      await ZanixAdmin.stop()
+      await ZanixAdminHub.stop()
     } finally {
-      Deno.env.delete('ADMIN_SERVER_ID')
+      Deno.env.delete('ADMIN_HUB_SERVER_ID')
     }
   },
 })

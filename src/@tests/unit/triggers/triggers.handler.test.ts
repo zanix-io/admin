@@ -29,14 +29,16 @@ Deno.test('TriggersController.list forwards to the installed aggregator', async 
   assertEquals(calls, [[]])
 })
 
-Deno.test('TriggersController.get forwards serviceId/model', async () => {
+Deno.test('TriggersController.get forwards service_id/model', async () => {
   const calls: unknown[][] = []
   fakeAggregator({
     get: (...args: unknown[]) => (
       calls.push(args), Promise.resolve({ model: 'Invoice', ...TRIGGER_DEFAULTS })
     ),
   })
-  const ctx = { payload: { params: { serviceId: 'billing', model: 'Invoice' } } } as HandlerContext<
+  const ctx = {
+    payload: { params: { service_id: 'billing', model: 'Invoice' } },
+  } as HandlerContext<
     never
   >
   const result = await controller.get(ctx)
@@ -44,7 +46,7 @@ Deno.test('TriggersController.get forwards serviceId/model', async () => {
   assertEquals(calls, [['billing', 'Invoice']])
 })
 
-Deno.test('TriggersController.create forwards serviceId + body fields', async () => {
+Deno.test('TriggersController.create forwards service_id + body fields', async () => {
   const calls: unknown[][] = []
   fakeAggregator({
     create: (...args: unknown[]) => (
@@ -53,7 +55,7 @@ Deno.test('TriggersController.create forwards serviceId + body fields', async ()
   })
   const ctx = {
     payload: {
-      params: { serviceId: 'billing' },
+      params: { service_id: 'billing' },
       body: { model: 'Invoice', active: true, triggers: { onCreate: [] } },
     },
   } as HandlerContext<never>
@@ -62,7 +64,7 @@ Deno.test('TriggersController.create forwards serviceId + body fields', async ()
   assertEquals(calls, [['billing', { model: 'Invoice', active: true, triggers: { onCreate: [] } }]])
 })
 
-Deno.test('TriggersController.update forwards serviceId/model + changes', async () => {
+Deno.test('TriggersController.update forwards service_id/model + changes', async () => {
   const calls: unknown[][] = []
   fakeAggregator({
     update: (...args: unknown[]) => (
@@ -71,7 +73,7 @@ Deno.test('TriggersController.update forwards serviceId/model + changes', async 
   })
   const ctx = {
     payload: {
-      params: { serviceId: 'billing', model: 'Invoice' },
+      params: { service_id: 'billing', model: 'Invoice' },
       body: { active: false, triggers: undefined },
     },
   } as HandlerContext<never>
@@ -80,12 +82,14 @@ Deno.test('TriggersController.update forwards serviceId/model + changes', async 
   assertEquals(calls, [['billing', 'Invoice', { active: false, triggers: undefined }]])
 })
 
-Deno.test('TriggersController.remove forwards serviceId/model, reports deleted', async () => {
+Deno.test('TriggersController.remove forwards service_id/model, reports deleted', async () => {
   const calls: unknown[][] = []
   fakeAggregator({
     remove: (...args: unknown[]) => (calls.push(args), Promise.resolve()),
   })
-  const ctx = { payload: { params: { serviceId: 'billing', model: 'Invoice' } } } as HandlerContext<
+  const ctx = {
+    payload: { params: { service_id: 'billing', model: 'Invoice' } },
+  } as HandlerContext<
     never
   >
   const result = await controller.remove(ctx)

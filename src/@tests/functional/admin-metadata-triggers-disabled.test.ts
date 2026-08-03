@@ -15,7 +15,7 @@ Deno.test({
   name: 'defineAdminMetadata() TRIGGERS_MODEL_NAME=false skips /admin/triggers entirely',
   fn: async () => {
     Deno.env.set('TRIGGERS_MODEL_NAME', 'false')
-    await defineAdminMetadata('metadata-triggers-disabled-test')
+    await defineAdminMetadata()
     Deno.env.delete('TRIGGERS_MODEL_NAME')
 
     const [serverId] = await bootstrapServers({

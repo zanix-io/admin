@@ -34,6 +34,18 @@ export interface ServiceExchangeControllerInstance extends ZanixController {
  * No options today — always `prefix: 'admin/service-token'` — a zero-argument factory rather than
  * a speculative options bag.
  *
+ * **This is the one authoritative definition of the `/admin/service-token` path** — 3 other sites
+ * hardcode the same literal rather than importing a shared constant, deliberately: a route path is
+ * business data expected to evolve alongside `@zanix/admin`'s own protocol, closer to
+ * `ADMIN_PROTOCOL_VERSION`'s category than to a stable header name — `@zanix/auth` intentionally
+ * owns no HTTP routes, so it can't be the shared home either, and neither `@zanix/server` (a route
+ * path implies a permissions concept it deliberately has none of) nor `@zanix/notifications` (would
+ * make it depend on `@zanix/admin`, an upward dependency) can host it. The 3 sites:
+ * `registry/auth.ts`'s `createServiceRegistryAuthHeaders`, `registry/reachability.ts`'s
+ * `checkServiceRegistryReachability`, and `@zanix/notifications`'s `remote-backend.ts`
+ * (`RemoteTemplateBackendConfig.url`'s own doc) — all 3 already cross-reference back to this
+ * function. Grep `'admin/service-token'` across the monorepo before renaming this prefix.
+ *
  * @requires @zanix/auth
  */
 export function createServiceExchangeController(): new (

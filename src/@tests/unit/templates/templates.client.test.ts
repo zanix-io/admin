@@ -105,10 +105,10 @@ Deno.test('TemplatesAdminClient.remove DELETEs /admin/templates/:channel/:name',
   assertSpyCalls(mockFetch, 1)
 })
 
-Deno.test('TemplatesAdminClient.sync POSTs {serviceId}, returns summary', async () => {
+Deno.test('TemplatesAdminClient.sync POSTs {service_id}, returns summary', async () => {
   const mockFetch = spy((_url: string, opts: any) => {
     assertEquals(opts.method, 'POST')
-    assertEquals(JSON.parse(opts.body), { serviceId: 'billing' })
+    assertEquals(JSON.parse(opts.body), { service_id: 'billing' })
     return jsonResponse({ seeded: 1, resynced: 0 })
   })
   globalThis.fetch = mockFetch as unknown as typeof fetch

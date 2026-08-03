@@ -93,7 +93,7 @@ export class TemplatesAdminClient extends RestClient {
    */
   public sync(serviceId: string): Promise<SyncCodeTemplatesResult> {
     return this.http.post<SyncCodeTemplatesResult>('/admin/templates/sync', {
-      body: JSON.stringify({ serviceId }),
+      body: JSON.stringify({ service_id: serviceId }),
     })
   }
 }

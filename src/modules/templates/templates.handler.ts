@@ -55,12 +55,12 @@ export interface TemplatesControllerInstance extends ZanixController<TemplatesAd
  * template contents.
  *
  * A factory rather than a plain class because `@Controller`'s `prefix` is decorator-time (static)
- * config — called once at boot by either `ZanixAdmin.start()` (with whatever `options.templates`
+ * config — called once at boot by either `ZanixAdminHub.start()` (with whatever `options.templates`
  * it was given) or this package's own `defineAdminMetadata()` (called in turn by `@zanix/core`'s
  * `start()`, fixed at `prefix: 'admin/templates'`); an app wiring this manually can call it directly
  * instead. Which Application (see `@zanix/server`'s `docs/HANDLERS.md`'s "Applications" section)
  * this route belongs to is decided by whichever `defineApplication(...)` scope is active when this
- * call runs, not by an option here — see the caller's own docs (`ZanixAdmin.start()`'s
+ * call runs, not by an option here — see the caller's own docs (`ZanixAdminHub.start()`'s
  * `templates.application`, or this package's own `ADMIN_TEMPLATES_APPLICATION` env var) for how that's
  * controlled.
  *

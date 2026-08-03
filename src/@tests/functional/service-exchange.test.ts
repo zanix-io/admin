@@ -14,7 +14,7 @@ import { createServiceExchangeController } from 'modules/service-exchange/servic
 // The real, full-HTTP-dispatch home for `/admin/service-token`'s deep exchange logic — moved here
 // from `@zanix/core`'s own functional tests, since this controller (and `exchangeServiceCredential`
 // itself, via `@zanix/auth`) is fully owned and tested by this package now. Booted directly via
-// `bootstrapServers`, not `ZanixAdmin.start()`, since that entrypoint doesn't wire this controller
+// `bootstrapServers`, not `ZanixAdminHub.start()`, since that entrypoint doesn't wire this controller
 // — it's a `@zanix/core`-side concern to register it (see `core`'s `defineAdminMetadata`).
 
 stub(console, 'info')
@@ -53,7 +53,10 @@ Deno.test({
     Deno.env.set('JWK_PUB_test-service', btoa(publicKey))
     Deno.env.set('JWK_PRI', btoa((await generateRSAKeys()).privateKey))
 
-    const assertion = await createServiceAssertion({ serviceId: 'test-service', privateKey })
+    const assertion = await createServiceAssertion({
+      serviceId: 'test-service',
+      privateKey: btoa(privateKey),
+    })
     const exchanged = await fetch(exchangeUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

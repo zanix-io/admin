@@ -1,9 +1,9 @@
 import { assert, assertEquals } from '@std/assert'
 import { stub } from '@std/testing/mock'
 import { DEFAULT_APPLICATION, webServerManager } from '@zanix/server'
-import ZanixAdmin from '../../../mod.ts'
+import ZanixAdminHub from '../../../mod.ts'
 
-// Its own file: `ZanixAdmin.start()` registers routes once per process (route paths can't be
+// Its own file: `ZanixAdminHub.start()` registers routes once per process (route paths can't be
 // redefined on a second call, and nothing un-registers them between `Deno.test` blocks in the same
 // file) — see `start.test.ts`'s own comment for the same constraint.
 
@@ -14,10 +14,10 @@ Deno.test({
   sanitizeOps: false,
   sanitizeResources: false,
   name:
-    "ZanixAdmin.start(): triggers: { application: 'main' } mounts /triggers on the public server",
+    "ZanixAdminHub.start(): triggers: { application: 'main' } mounts /triggers on the public server",
   fn: async () => {
     const publicServers: string[] = []
-    const servers = await ZanixAdmin.start({
+    const servers = await ZanixAdminHub.start({
       triggers: { application: DEFAULT_APPLICATION },
       rest: { onCreate: (id) => publicServers.push(id) },
     })
@@ -31,6 +31,6 @@ Deno.test({
     assertEquals(res.status, 401)
     await res.body?.cancel()
 
-    await ZanixAdmin.stop()
+    await ZanixAdminHub.stop()
   },
 })

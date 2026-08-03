@@ -43,7 +43,7 @@ sharing one hardcoded deployment.
   templates database at all and call `zanix-admin`'s `/templates` API instead (see
   `@zanix/notifications`'s own `docs/templates.md`, "Mode C: remote-only templates").
 
-`ZanixAdmin.start()` is the reference deployable entrypoint — the quickest way to stand up a real
+`ZanixAdminHub.start()` is the reference deployable entrypoint — the quickest way to stand up a real
 instance. It's a convenience, not the only supported path: an app that wires
 `createTriggersController()`/`createTemplatesController()` into its own
 `@zanix/server`/`@zanix/core`-based bootstrap directly (see [Basic Usage](#-basic-usage)) never
@@ -52,7 +52,7 @@ needs it at all.
 Both are bound to the `'admin'` Application and anchored by default — this is `zanix-admin`'s own
 admin/ops surface, not meant to be reachable by an arbitrary public caller — and both accept a
 `prefix` override via the factory's own argument for manual wiring, plus an `application: 'main'`
-override via `ZanixAdmin.start({ triggers, templates })` for a deployment platform that genuinely
+override via `ZanixAdminHub.start({ triggers, templates })` for a deployment platform that genuinely
 can't isolate an anchored server (wiring the factories manually instead means wrapping the call in
 `ProgramModule.defineApplication(...)` yourself to get the same effect — see
 [Basic Usage](#-basic-usage)).
@@ -62,7 +62,7 @@ can't isolate an anchored server (wiring the factories manually instead means wr
 ## 📦 Installation
 
 ```ts
-import ZanixAdmin, {
+import ZanixAdminHub, {
   createTemplatesController,
   createTriggersController,
   ServiceRegistry,
@@ -74,14 +74,14 @@ import ZanixAdmin, {
 
 ## 🚀 Basic Usage
 
-### The quick path: `ZanixAdmin.start()`
+### The quick path: `ZanixAdminHub.start()`
 
 Registers `TriggersController`/`TemplatesController` and their supporting connectors/providers
 (`@zanix/datamaster`'s Mongo/Redis/cache, `@zanix/auth`'s session infra, `@zanix/notifications`'s
 `TemplateProvider`), then starts a REST server:
 
 ```typescript
-import ZanixAdmin, {
+import ZanixAdminHub, {
   ServiceRegistry,
   setTriggersAggregator,
   TriggersAdminClient,
@@ -99,16 +99,16 @@ setTriggersAggregator(
   ),
 )
 
-await ZanixAdmin.start() // requires MONGO_URI + TEMPLATES_MODEL_NAME/DATABASE_TEMPLATES for /templates
+await ZanixAdminHub.start() // requires MONGO_URI + TEMPLATES_MODEL_NAME/DATABASE_TEMPLATES for /templates
 ```
 
 Requires a database connector configured (`MONGO_URI`, plus `TEMPLATES_MODEL_NAME` or
 `DATABASE_TEMPLATES=true` for `/templates`), same as any `@zanix/core`-based service with DB-backed
-templates. `ZanixAdmin.stop()` stops whatever it started.
+templates. `ZanixAdminHub.stop()` stops whatever it started.
 
 ### Manual wiring: using `TriggersAggregator` directly
 
-For an app that builds its own bootstrap instead of using `ZanixAdmin.start()`:
+For an app that builds its own bootstrap instead of using `ZanixAdminHub.start()`:
 
 ```typescript
 import { ServiceRegistry, TriggersAggregator } from 'jsr:@zanix/admin@[version]'
@@ -169,6 +169,8 @@ See [`docs/templates-api.md`](./docs/templates-api.md) for the full CRUD/sync re
   and pluggable per-service authentication.
 - [`docs/templates-api.md`](./docs/templates-api.md) — CRUD routes and the batch `/templates/sync`
   endpoint.
+- [`docs/service-authentication.md`](./docs/service-authentication.md) — end-to-end example of a
+  service authenticating against another service's admin API or against `ZanixAdminHub` itself.
 
 Find other Zanix libraries' own docs at: 🔗
 [https://github.com/zanix-io](https://github.com/zanix-io)

@@ -82,6 +82,26 @@ Deno.test('checkServiceRegistryReachability: classifies a 5xx as unexpected', as
   }])
 })
 
+Deno.test({
+  name:
+    'checkServiceRegistryReachability: a 2xx (the probe assertion somehow accepted) is unexpected',
+  fn: async () => {
+    globalThis.fetch = (() => httpResponse(200, 'OK')) as unknown as typeof fetch
+
+    const registry = new ServiceRegistry([{
+      serviceId: 'billing',
+      adminBaseUrl: 'http://billing.internal',
+    }])
+    const results = await checkServiceRegistryReachability({ registry })
+
+    assertEquals(results, [{
+      serviceId: 'billing',
+      adminBaseUrl: 'http://billing.internal',
+      status: 'unexpected',
+    }])
+  },
+})
+
 Deno.test('checkServiceRegistryReachability: never throws when every entry fails', async () => {
   const registry = new ServiceRegistry([
     { serviceId: 'billing', adminBaseUrl: 'http://billing.internal' },

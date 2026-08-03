@@ -1,5 +1,5 @@
 // deno-lint-ignore-file no-explicit-any
-import { assert, assertEquals, assertThrows } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import { stub } from '@std/testing/mock'
 import { InternalError } from '@zanix/errors'
 import { ServiceRegistry } from 'modules/registry/registry.ts'
@@ -84,6 +84,31 @@ Deno.test('TriggersAggregator.get proxies only to the resolved service', async (
   assertEquals(calls, ['inventory:Item'])
 })
 
+Deno.test({
+  name:
+    'TriggersAggregator: both factories may return a Promise (e.g. an async, credential-exchanging factory) — list()/get() await it before using the client',
+  fn: async () => {
+    // deno-lint-ignore require-await
+    const discoveryClientFactory: TriggersDiscoveryClientFactory = async (service) =>
+      fakeDiscoveryClient(() => Promise.resolve([{ model: `${service.serviceId}-model` }]))
+    // deno-lint-ignore require-await
+    const clientFactory: TriggersClientFactory = async (service) =>
+      fakeClient({ get: () => Promise.resolve({ model: `${service.serviceId}-model` }) })
+
+    const aggregator = new TriggersAggregator(registry, clientFactory, discoveryClientFactory)
+
+    const listed = await aggregator.list()
+    assertEquals(listed.map((t) => t.serviceId).sort(), ['billing', 'inventory'])
+    assertEquals(listed.map((t) => (t as never as { model: string }).model).sort(), [
+      'billing-model',
+      'inventory-model',
+    ])
+
+    const got = await aggregator.get('billing', 'Invoice')
+    assertEquals(got, { model: 'billing-model' } as never)
+  },
+})
+
 Deno.test('TriggersAggregator.create forwards model/active/triggers', async () => {
   const calls: unknown[] = []
   const clientFactory: TriggersClientFactory = () =>
@@ -128,19 +153,23 @@ Deno.test('TriggersAggregator.remove forwards model to the resolved service', as
   assertEquals(calls, [['Invoice']])
 })
 
-Deno.test('TriggersAggregator.get throws for an unregistered service, never calls a client', () => {
-  let called = false
-  const clientFactory: TriggersClientFactory = () => {
-    called = true
-    return fakeClient()
-  }
+Deno.test({
+  name: 'TriggersAggregator.get throws for an unregistered service, never calls a client',
+  fn: async () => {
+    let called = false
+    const clientFactory: TriggersClientFactory = () => {
+      called = true
+      return fakeClient()
+    }
 
-  const aggregator = new TriggersAggregator(registry, clientFactory)
+    const aggregator = new TriggersAggregator(registry, clientFactory)
 
-  assertThrows(() => {
-    aggregator.get('unknown-service', 'Invoice')
-  }, InternalError)
-  assertEquals(called, false)
+    // `get()` is `async` (its factory may need to `await` a real credential exchange), so a
+    // synchronous failure like "unregistered service" now surfaces as a rejected Promise, not a
+    // synchronous throw — `assertRejects`, not `assertThrows`.
+    await assertRejects(() => aggregator.get('unknown-service', 'Invoice'), InternalError)
+    assertEquals(called, false)
+  },
 })
 
 Deno.test({

@@ -12,17 +12,25 @@ export type AggregatedTrigger = TriggersModelAttrs & { serviceId: string }
 /**
  * Builds the `TriggersAdminClient` used to call a given registered service — the pluggable seam
  * for attaching per-service auth (e.g. a cached `type: 'api'` token from `@zanix/auth`'s
- * `exchangeServiceCredential`). Defaults to an unauthenticated client, which only works against a
- * target that doesn't actually require a token — real deployments should always provide one.
+ * `exchangeServiceCredential`/`createServiceAuthClient`). Defaults to an unauthenticated client,
+ * which only works against a target that doesn't actually require a token — real deployments
+ * should always provide one. May return a `Promise` — attaching a real credential is inherently
+ * async (it has to sign+exchange, at least on a cache miss — see `createServiceAuthClient`), so
+ * every call site in this class already `await`s the factory's own result before using the client.
  */
-export type TriggersClientFactory = (service: ServiceRegistryEntry) => TriggersAdminClient
+export type TriggersClientFactory = (
+  service: ServiceRegistryEntry,
+) => TriggersAdminClient | Promise<TriggersAdminClient>
 
 /**
  * Builds the `DiscoveryAdminClient` `list()` uses to fetch a service's `/.well-known/zanix/triggers`
  * snapshot — the same pluggable-auth seam as {@link TriggersClientFactory}, kept separate since a
- * plain read (Discovery) and a CRUD/mutation call may reasonably want different credentials.
+ * plain read (Discovery) and a CRUD/mutation call may reasonably want different credentials. May
+ * return a `Promise`, same reason as {@link TriggersClientFactory}.
  */
-export type TriggersDiscoveryClientFactory = (service: ServiceRegistryEntry) => DiscoveryAdminClient
+export type TriggersDiscoveryClientFactory = (
+  service: ServiceRegistryEntry,
+) => DiscoveryAdminClient | Promise<DiscoveryAdminClient>
 
 const defaultClientFactory: TriggersClientFactory = (service) =>
   new TriggersAdminClient({ baseUrl: service.adminBaseUrl })
@@ -70,9 +78,8 @@ export class TriggersAggregator {
     const services = this.#registry.list()
 
     const perService = await Promise.all(services.map(async (service) => {
-      const triggers = await this.#createDiscoveryClient(service).snapshot<TriggersModelAttrs>(
-        'triggers',
-      )
+      const client = await this.#createDiscoveryClient(service)
+      const triggers = await client.snapshot<TriggersModelAttrs>('triggers')
       return triggers.map((trigger) => ({ ...trigger, serviceId: service.serviceId }))
     }))
 
@@ -80,34 +87,38 @@ export class TriggersAggregator {
   }
 
   /** Gets a single trigger entry from the given service. */
-  public get(serviceId: string, model: string): Promise<TriggersModelAttrs> {
+  public async get(serviceId: string, model: string): Promise<TriggersModelAttrs> {
     const service = this.#registry.get(serviceId)
-    return this.#createClient(service).get(model)
+    const client = await this.#createClient(service)
+    return client.get(model)
   }
 
   /** Creates a trigger entry on the given service. */
-  public create(
+  public async create(
     serviceId: string,
     input: CreateTriggerInput,
   ): Promise<TriggersModelAttrs> {
     const service = this.#registry.get(serviceId)
-    return this.#createClient(service).create(input)
+    const client = await this.#createClient(service)
+    return client.create(input)
   }
 
   /** Updates a trigger entry on the given service. */
-  public update(
+  public async update(
     serviceId: string,
     model: string,
     changes: UpdateTriggerInput,
   ): Promise<TriggersModelAttrs> {
     const service = this.#registry.get(serviceId)
-    return this.#createClient(service).update(model, changes)
+    const client = await this.#createClient(service)
+    return client.update(model, changes)
   }
 
   /** Deletes a trigger entry on the given service. */
-  public remove(serviceId: string, model: string): Promise<void> {
+  public async remove(serviceId: string, model: string): Promise<void> {
     const service = this.#registry.get(serviceId)
-    return this.#createClient(service).remove(model)
+    const client = await this.#createClient(service)
+    return client.remove(model)
   }
 }
 

@@ -42,20 +42,20 @@ export interface TriggersControllerInstance extends ZanixController {
 
 /**
  * Builds `zanix-admin`'s triggers API — HTTP surface for `TriggersAggregator`. Unlike
- * `TemplatesController`, this never owns any data itself: every route resolves the `serviceId`
+ * `TemplatesController`, this never owns any data itself: every route resolves the `service_i`
  * from the request path and proxies straight to that business service's own `/admin/triggers`, via
  * whichever `TriggersAggregator` instance {@link getTriggersAggregator} resolves (installed with
  * `setTriggersAggregator`, or a sensible unauthenticated default).
  *
  * A factory rather than a plain class because `@Controller`'s `prefix` is decorator-time (static)
- * config — `ZanixAdmin.start()` calls this once at boot with whatever `options.triggers` it was
+ * config — `ZanixAdminHub.start()` calls this once at boot with whatever `options.triggers` it was
  * given (see its own docs); an app wiring this manually can call it directly instead. Which
  * Application (see `@zanix/server`'s `docs/HANDLERS.md`'s "Applications" section) this route
  * belongs to is decided by whichever `defineApplication(...)` scope is active when this call runs,
- * not by an option here — see `ZanixAdmin.start()`'s own docs (`triggers.application`) for how
+ * not by an option here — see `ZanixAdminHub.start()`'s own docs (`triggers.application`) for how
  * that's controlled. Unlike `createTriggersAdminController` (a business service's own local triggers,
  * rebindable via `ADMIN_TRIGGERS_APPLICATION`), this aggregator has no such env var override —
- * only `ZanixAdmin.start()` composes it, always explicitly.
+ * only `ZanixAdminHub.start()` composes it, always explicitly.
  *
  * @requires @zanix/database
  * @requires @zanix/auth
@@ -73,42 +73,42 @@ export function createTriggersController(
       return getTriggersAggregator().list()
     }
 
-    @Get(':serviceId/:model', { Params: TriggerServiceModelParamsRTO })
+    @Get(':service_id/:model', { Params: TriggerServiceModelParamsRTO })
     @AuthTokenValidation({ permissions: REQUIRED_ROLE, type: AUTH_TYPES })
     public get(
       ctx: HandlerContext<{ params: TriggerServiceModelParamsRTO }>,
     ): Promise<TriggersModelAttrs> {
-      const { serviceId, model } = ctx.payload.params
-      return getTriggersAggregator().get(serviceId, model)
+      const { service_id, model } = ctx.payload.params
+      return getTriggersAggregator().get(service_id, model)
     }
 
-    @Post(':serviceId', { Body: CreateTriggerRTO, Params: TriggerServiceParamsRTO })
+    @Post(':service_id', { Body: CreateTriggerRTO, Params: TriggerServiceParamsRTO })
     @AuthTokenValidation({ permissions: REQUIRED_ROLE, type: AUTH_TYPES })
     public create(
       ctx: HandlerContext<{ body: CreateTriggerRTO; params: TriggerServiceParamsRTO }>,
     ): Promise<TriggersModelAttrs> {
-      const { serviceId } = ctx.payload.params
+      const { service_id } = ctx.payload.params
       const { model, active, triggers } = ctx.payload.body
-      return getTriggersAggregator().create(serviceId, { model, active, triggers })
+      return getTriggersAggregator().create(service_id, { model, active, triggers })
     }
 
-    @Put(':serviceId/:model', { Body: UpdateTriggerRTO, Params: TriggerServiceModelParamsRTO })
+    @Put(':service_id/:model', { Body: UpdateTriggerRTO, Params: TriggerServiceModelParamsRTO })
     @AuthTokenValidation({ permissions: REQUIRED_ROLE, type: AUTH_TYPES })
     public update(
       ctx: HandlerContext<{ body: UpdateTriggerRTO; params: TriggerServiceModelParamsRTO }>,
     ): Promise<TriggersModelAttrs> {
-      const { serviceId, model } = ctx.payload.params
+      const { service_id, model } = ctx.payload.params
       const { active, triggers } = ctx.payload.body
-      return getTriggersAggregator().update(serviceId, model, { active, triggers })
+      return getTriggersAggregator().update(service_id, model, { active, triggers })
     }
 
-    @Delete(':serviceId/:model', { Params: TriggerServiceModelParamsRTO })
+    @Delete(':service_id/:model', { Params: TriggerServiceModelParamsRTO })
     @AuthTokenValidation({ permissions: REQUIRED_ROLE, type: AUTH_TYPES })
     public async remove(
       ctx: HandlerContext<{ params: TriggerServiceModelParamsRTO }>,
     ): Promise<{ deleted: string }> {
-      const { serviceId, model } = ctx.payload.params
-      await getTriggersAggregator().remove(serviceId, model)
+      const { service_id, model } = ctx.payload.params
+      await getTriggersAggregator().remove(service_id, model)
       return { deleted: model }
     }
   }

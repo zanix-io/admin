@@ -1,13 +1,13 @@
 import { assert, assertEquals } from '@std/assert'
 import { stub } from '@std/testing/mock'
 import { Controller, Get, webServerManager, ZanixController } from '@zanix/server'
-import ZanixAdmin from '../../../mod.ts'
+import ZanixAdminHub from '../../../mod.ts'
 
-// Its own file: `ZanixAdmin.start()` registers routes once per process — see `start.test.ts`'s
+// Its own file: `ZanixAdminHub.start()` registers routes once per process — see `start.test.ts`'s
 // own comment for the same constraint.
 
 // Simulates an unrelated business app's own public route already sitting in the shared,
-// process-global route registry by the time `ZanixAdmin.start()` runs (e.g. `Zanix.start()`
+// process-global route registry by the time `ZanixAdminHub.start()` runs (e.g. `Zanix.start()`
 // called unawaited in the same process) — see `start.ts`'s `wantsPublicRoute` guard.
 @Controller()
 class _ForeignBusinessAppController extends ZanixController {
@@ -24,9 +24,9 @@ Deno.test({
   sanitizeOps: false,
   sanitizeResources: false,
   name:
-    'ZanixAdmin.start() default (no explicit public triggers/templates) never serves a foreign public route left in the shared registry',
+    'ZanixAdminHub.start() default (no explicit public triggers/templates) never serves a foreign public route left in the shared registry',
   fn: async () => {
-    const servers = await ZanixAdmin.start()
+    const servers = await ZanixAdminHub.start()
 
     // Only the admin Application server started — the "public" bootstrap never ran, since neither
     // triggers nor templates was configured with `application: 'main'`.
@@ -40,6 +40,6 @@ Deno.test({
     assertEquals(res.status, 404)
     await res.body?.cancel()
 
-    await ZanixAdmin.stop()
+    await ZanixAdminHub.stop()
   },
 })

@@ -1,4 +1,6 @@
-import { guardSingleAdminRegistration, ProgramModule } from '@zanix/server'
+import type { MiddlewareGuard } from '@zanix/server'
+
+import { ProgramModule } from '@zanix/server'
 import {
   createTemplatesDiscoveryProvider,
   isDatabaseTemplatesDisabled,
@@ -24,6 +26,22 @@ import { createTemplatesController } from './templates/templates.handler.ts'
 // `syncTemplatesFromRegisteredService`) authenticates as `type: 'api'`, the same as the CRUD
 // counterparts these Discovery endpoints sit alongside.
 const DISCOVERY_AUTH_TYPES = ADMIN_AUTH_TYPES
+
+/**
+ * The default guard for any templates-shaped Discovery surface — `{@link ADMIN_ROLE}`/
+ * `{@link ADMIN_TEMPLATES_ROLE}`, same as this package's own `/admin/templates` CRUD. Used below
+ * for `/.well-known/zanix/templates`; also exported (see `../../mod.ts`) so `@zanix/core`'s own
+ * `codeTemplatesDiscovery` option (`/.well-known/zanix/code-templates`) can require the same role
+ * without re-inlining the `jwtValidationGuard(...)` construction — that route is a different
+ * resource (this process's own in-code catalog, not this package's DB-backed records), but the
+ * "who's allowed to read a template list" question is the same one either way.
+ */
+export function createTemplatesDiscoveryGuard(): MiddlewareGuard {
+  return jwtValidationGuard({
+    permissions: [ADMIN_ROLE, ADMIN_TEMPLATES_ROLE],
+    type: DISCOVERY_AUTH_TYPES,
+  })
+}
 
 // Kept alive deliberately: unlike a module-level `export class X {}` (always reachable through its
 // own module's exports for the life of the process), a class produced by a factory and only ever
@@ -78,12 +96,11 @@ const registeredAdminControllers: unknown[] = []
  *   {@link ADMIN_APPLICATION} — safe by default, since it rejects any caller without a registered
  *   `JWK_PUB_<serviceId>` regardless. See `@zanix/auth`'s `docs/service-credential.md`.
  *
- * @param owner A short, human-readable label identifying the caller registering this — forwarded
- * to {@link guardSingleAdminRegistration} (`'core'` for `@zanix/core`'s own `start()`).
+ * Safe to run in the same process as {@link start} (`ZanixAdminHub`'s own reference bootstrap) —
+ * see that function's own doc for why these two independent route sets never corrupt each other's
+ * registration, even fired without a sequential `await` between them.
  */
-export const defineAdminMetadata = async (owner: string): Promise<void> => {
-  guardSingleAdminRegistration(owner)
-
+export const defineAdminMetadata = async (): Promise<void> => {
   const controllers: unknown[] = []
 
   await ProgramModule.defineApplication(ADMIN_APPLICATION, () => {
@@ -118,12 +135,7 @@ export const defineAdminMetadata = async (owner: string): Promise<void> => {
       // Same role gate as the CRUD endpoint above — see `createTemplatesDiscoveryProvider`'s own
       // doc for why this reuses `TemplatesAdminRepository` rather than a second query path.
       ProgramModule.defineDiscovery('templates', createTemplatesDiscoveryProvider(), {
-        guards: [
-          jwtValidationGuard({
-            permissions: [ADMIN_ROLE, ADMIN_TEMPLATES_ROLE],
-            type: DISCOVERY_AUTH_TYPES,
-          }),
-        ],
+        guards: [createTemplatesDiscoveryGuard()],
       })
     })
     controllers.push(controller)

@@ -18,7 +18,7 @@ Deno.test({
     'defineAdminMetadata() TEMPLATES_MODEL_NAME set (DB templates not disabled) registers /admin/templates + its Discovery',
   fn: async () => {
     Deno.env.set(TEMPLATES_MODEL_ENV, 'zanix-templates-test')
-    await defineAdminMetadata('metadata-templates-enabled-test')
+    await defineAdminMetadata()
     Deno.env.delete(TEMPLATES_MODEL_ENV)
 
     const [serverId] = await bootstrapServers({

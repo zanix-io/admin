@@ -14,7 +14,7 @@
  * business services — see this package's own README for the full design.
  *
  * This is a **library**, not a single deployable app — any team stands up its own admin service by
- * importing this package, either via {@link ZanixAdmin}'s reference `start()`/`stop()` (the
+ * importing this package, either via {@link ZanixAdminHub}'s reference `start()`/`stop()` (the
  * quickest path) or by wiring `createTriggersController()`/`createTemplatesController()` into its
  * own `@zanix/server`/`@zanix/core`-based bootstrap directly. See the README for both.
  */
@@ -30,6 +30,7 @@ export {
 export type { ServiceRegistryEntry } from 'typings/registry.ts'
 export { checkServiceRegistryReachability } from 'modules/registry/reachability.ts'
 export type { ReachabilityResult } from 'modules/registry/reachability.ts'
+export { createServiceRegistryAuthHeaders } from 'modules/registry/auth.ts'
 /** Re-exported so `createTemplatesDiscoveryProvider`'s own return type is nameable. */
 export type { DiscoveryProvider } from '@zanix/server'
 
@@ -51,6 +52,13 @@ export {
  * per-controller composition behavior and the two `*_APPLICATION` env var overrides.
  */
 export { defineAdminMetadata } from 'modules/metadata.ts'
+/**
+ * The default guard (`ADMIN_ROLE`/`ADMIN_TEMPLATES_ROLE`) for any templates-shaped Discovery
+ * surface — this package's own `/.well-known/zanix/templates` and `@zanix/core`'s
+ * `codeTemplatesDiscovery` option (`/.well-known/zanix/code-templates`) both use it, so the two
+ * don't drift out of sync on who's allowed to read a template list. See its own doc.
+ */
+export { createTemplatesDiscoveryGuard } from 'modules/metadata.ts'
 // Re-exported from `@zanix/server` (not defined here) so a business service's own admin
 // controller can use the same header name without depending on this package.
 export { ADMIN_PROTOCOL_HEADER } from '@zanix/server'
@@ -166,7 +174,7 @@ export {
  * Builds `zanix-admin`'s own templates API — the actual owner of the templates collection, unlike
  * triggers (a proxy). Requires a database connector to be configured (`MONGO_URI`,
  * `TEMPLATES_MODEL_NAME`/`DATABASE_TEMPLATES`, etc.), same as any `@zanix/core`-based service with
- * DB-backed templates — {@link ZanixAdmin.start} wires this automatically. See
+ * DB-backed templates — {@link ZanixAdminHub.start} wires this automatically. See
  * `TemplatesControllerOptions` to change the route prefix; which Application this route belongs to
  * is decided by whichever `defineApplication(...)` scope is active when the caller invokes this
  * factory.
@@ -203,14 +211,14 @@ export {
  *
  * @example
  * ```ts
- * import ZanixAdmin, { setTriggersAggregator, TriggersAggregator } from 'jsr:@zanix/admin@[version]'
+ * import ZanixAdminHub, { setTriggersAggregator, TriggersAggregator } from 'jsr:@zanix/admin@[version]'
  *
  * setTriggersAggregator(new TriggersAggregator(registry, clientFactory)) // install real per-service auth first
  *
- * await ZanixAdmin.start()
+ * await ZanixAdminHub.start()
  * ```
  */
-export default class ZanixAdmin {
+export default class ZanixAdminHub {
   /**
    * Registers this package's routes/connectors and starts a REST server for them.
    *
@@ -220,6 +228,6 @@ export default class ZanixAdmin {
    */
   public static start = start
 
-  /** Stops every server {@link ZanixAdmin.start} started. */
+  /** Stops every server {@link ZanixAdminHub.start} started. */
   public static stop = stop
 }

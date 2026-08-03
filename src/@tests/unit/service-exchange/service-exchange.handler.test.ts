@@ -25,7 +25,10 @@ Deno.test('ServiceExchangeController: forwards the assertion, returns a credenti
   Deno.env.set(`JWK_PUB_${SERVICE_ID}`, btoa(publicKey))
 
   try {
-    const assertion = await createServiceAssertion({ serviceId: SERVICE_ID, privateKey })
+    const assertion = await createServiceAssertion({
+      serviceId: SERVICE_ID,
+      privateKey: btoa(privateKey),
+    })
     const instance = new ServiceExchangeController({ id: 'test-ctx' } as never)
 
     const result = await instance.exchange(fakeCtx(assertion))
@@ -41,7 +44,10 @@ Deno.test('ServiceExchangeController: forwards the assertion, returns a credenti
 
 Deno.test('ServiceExchangeController: rejects an unregistered service assertion', async () => {
   const { privateKey } = await generateRSAKeys()
-  const assertion = await createServiceAssertion({ serviceId: 'unregistered', privateKey })
+  const assertion = await createServiceAssertion({
+    serviceId: 'unregistered',
+    privateKey: btoa(privateKey),
+  })
   const instance = new ServiceExchangeController({ id: 'test-ctx' } as never)
 
   await assertRejects(() => instance.exchange(fakeCtx(assertion)))

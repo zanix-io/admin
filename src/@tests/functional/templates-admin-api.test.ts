@@ -5,7 +5,7 @@ import { createTemplatesController } from 'modules/templates/templates.handler.t
 
 // The real, full-HTTP-dispatch home for a business service's own `/admin/templates` — moved here
 // from `@zanix/core`'s own functional tests, since this controller is fully owned and tested by
-// this package now. Booted directly via `bootstrapServers`, not `ZanixAdmin.start()`, since that
+// this package now. Booted directly via `bootstrapServers`, not `ZanixAdminHub.start()`, since that
 // entrypoint calls this factory with its own default `prefix: 'templates'` (a different route, for
 // `zanix-admin`'s own aggregator role — see `start.test.ts`), not `@zanix/core`'s
 // `prefix: 'admin/templates'` — it's a `@zanix/core`-side concern to register this one at that path

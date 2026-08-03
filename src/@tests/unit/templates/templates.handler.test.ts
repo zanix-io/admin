@@ -124,7 +124,7 @@ Deno.test("TemplatesController.remove falls back to 'unknown' with no session", 
 
 // `sync()` no longer delegates to `this.interactor` (see `syncTemplatesFromRegisteredService`'s
 // own tests, `templates-sync.test.ts`) — these two just confirm the route forwards
-// `body.serviceId`/`session.id` into that standalone function correctly, using the same
+// `body.service_id`/`session.id` into that standalone function correctly, using the same
 // registry/fetch/providers stubbing seam its own dedicated test suite already exercises fully.
 function withSyncEnv(updatedByCalls: unknown[][], fn: () => Promise<unknown>) {
   setServiceRegistry(
@@ -159,17 +159,20 @@ function withSyncEnv(updatedByCalls: unknown[][], fn: () => Promise<unknown>) {
   })
 }
 
-Deno.test('TemplatesController.sync forwards serviceId + session id, returns summary', async () => {
-  const calls: unknown[][] = []
-  const ctx = {
-    payload: { body: { serviceId: 'billing' } },
-    session: { id: 'service-account-1' },
-  } as HandlerContext<never>
+Deno.test({
+  name: 'TemplatesController.sync forwards service_id + session id, returns summary',
+  fn: async () => {
+    const calls: unknown[][] = []
+    const ctx = {
+      payload: { body: { serviceId: 'billing' } },
+      session: { id: 'service-account-1' },
+    } as HandlerContext<never>
 
-  const result = await withSyncEnv(calls, () => handler.sync.call(fakeThis({}), ctx))
+    const result = await withSyncEnv(calls, () => handler.sync.call(fakeThis({}), ctx))
 
-  assertEquals(result, { seeded: 1, resynced: 0 })
-  assertEquals(calls[0][1], 'service-account-1')
+    assertEquals(result, { seeded: 1, resynced: 0 })
+    assertEquals(calls[0][1], 'service-account-1')
+  },
 })
 
 Deno.test("TemplatesController.sync falls back to 'unknown' with no session", async () => {

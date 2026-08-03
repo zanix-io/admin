@@ -26,7 +26,7 @@ Deno.test({
     Deno.env.set(ADMIN_TRIGGERS_APPLICATION_ENV, DEFAULT_APPLICATION)
     Deno.env.set(ADMIN_TEMPLATES_APPLICATION_ENV, DEFAULT_APPLICATION)
     Deno.env.set(TEMPLATES_MODEL_ENV, 'zanix-templates-test')
-    await defineAdminMetadata('metadata-application-overrides-test')
+    await defineAdminMetadata()
     Deno.env.delete(ADMIN_TRIGGERS_APPLICATION_ENV)
     Deno.env.delete(ADMIN_TEMPLATES_APPLICATION_ENV)
     Deno.env.delete(TEMPLATES_MODEL_ENV)
