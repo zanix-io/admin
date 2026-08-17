@@ -63,7 +63,10 @@ Deno.test({
       body: JSON.stringify({ assertion }),
     })
     assertEquals(exchanged.status, 200)
-    assertEquals(exchanged.headers.get(ADMIN_PROTOCOL_HEADER), String(ADMIN_PROTOCOL_VERSION))
+    assertEquals(
+      exchanged.headers.get(ADMIN_PROTOCOL_HEADER),
+      String(ADMIN_PROTOCOL_VERSION),
+    )
     const credential = await exchanged.json()
     assert(credential.accessToken)
     assertEquals(credential.serviceId, 'test-service')

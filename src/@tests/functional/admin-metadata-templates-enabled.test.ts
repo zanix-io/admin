@@ -22,7 +22,10 @@ Deno.test({
     Deno.env.delete(TEMPLATES_MODEL_ENV)
 
     const [serverId] = await bootstrapServers({
-      rest: { application: ADMIN_APPLICATION, id: 'metadata-templates-enabled-test' },
+      rest: {
+        application: ADMIN_APPLICATION,
+        id: 'metadata-templates-enabled-test',
+      },
     })
     assert(serverId, 'the admin REST server should have been started')
 
@@ -34,7 +37,9 @@ Deno.test({
     assertEquals(templates.status, 401)
     await templates.body?.cancel()
 
-    const templatesDiscovery = await fetch(`${baseUrl}/.well-known/zanix/templates`)
+    const templatesDiscovery = await fetch(
+      `${baseUrl}/.well-known/zanix/templates`,
+    )
     assertEquals(templatesDiscovery.status, 401)
     await templatesDiscovery.body?.cancel()
 

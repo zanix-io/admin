@@ -7,12 +7,15 @@ import { ServiceExchangeRTO } from './service-exchange.rto.ts'
 
 /** The instance shape {@link createServiceExchangeController} builds — see its own docs. */
 export interface ServiceExchangeControllerInstance extends ZanixController {
-  exchange(ctx: HandlerContext<{ body: ServiceExchangeRTO }>): Promise<ServiceCredential>
+  /** `POST /` — exchanges a signed service assertion for a short-lived credential. */
+  exchange(
+    ctx: HandlerContext<{ body: ServiceExchangeRTO }>,
+  ): Promise<ServiceCredential>
 }
 
 /**
  * Machine-to-machine credential exchange — always registered under the `'admin'` Application (see
- * `docs/HANDLERS.md`'s "Applications" section), the HTTP route `@zanix/auth`'s
+ * `docs/APPLICATIONS.md`), the HTTP route `@zanix/auth`'s
  * `docs/service-credential.md` deliberately leaves for whichever consumer needs it
  * (`@zanix/auth` exports the primitive, not a mounted endpoint, the same way it doesn't own any
  * other HTTP route). This is that route: a thin wrapper around `exchangeServiceCredential`, reused

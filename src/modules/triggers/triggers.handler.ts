@@ -27,14 +27,25 @@ export interface TriggersControllerOptions {
 
 /** The instance shape {@link createTriggersController} builds — see its own docs. */
 export interface TriggersControllerInstance extends ZanixController {
+  /** `GET /` — lists triggers aggregated across every registered service. */
   list(): Promise<AggregatedTrigger[]>
-  get(ctx: HandlerContext<{ params: TriggerServiceModelParamsRTO }>): Promise<TriggersModelAttrs>
+  /** `GET /:serviceId/:model` — proxies to that specific registered service's own trigger. */
+  get(
+    ctx: HandlerContext<{ params: TriggerServiceModelParamsRTO }>,
+  ): Promise<TriggersModelAttrs>
+  /** `POST /:serviceId` — creates a trigger entry on that specific registered service. */
   create(
-    ctx: HandlerContext<{ body: CreateTriggerRTO; params: TriggerServiceParamsRTO }>,
+    ctx: HandlerContext<
+      { body: CreateTriggerRTO; params: TriggerServiceParamsRTO }
+    >,
   ): Promise<TriggersModelAttrs>
+  /** `PUT /:serviceId/:model` — updates a trigger entry on that specific registered service. */
   update(
-    ctx: HandlerContext<{ body: UpdateTriggerRTO; params: TriggerServiceModelParamsRTO }>,
+    ctx: HandlerContext<
+      { body: UpdateTriggerRTO; params: TriggerServiceModelParamsRTO }
+    >,
   ): Promise<TriggersModelAttrs>
+  /** `DELETE /:serviceId/:model` — removes a trigger entry from that specific registered service. */
   remove(
     ctx: HandlerContext<{ params: TriggerServiceModelParamsRTO }>,
   ): Promise<{ deleted: string }>
@@ -42,7 +53,7 @@ export interface TriggersControllerInstance extends ZanixController {
 
 /**
  * Builds `zanix-admin`'s triggers API — HTTP surface for `TriggersAggregator`. Unlike
- * `TemplatesController`, this never owns any data itself: every route resolves the `service_i`
+ * `TemplatesController`, this never owns any data itself: every route resolves the `serviceId`
  * from the request path and proxies straight to that business service's own `/admin/triggers`, via
  * whichever `TriggersAggregator` instance {@link getTriggersAggregator} resolves (installed with
  * `setTriggersAggregator`, or a sensible unauthenticated default).
@@ -50,7 +61,7 @@ export interface TriggersControllerInstance extends ZanixController {
  * A factory rather than a plain class because `@Controller`'s `prefix` is decorator-time (static)
  * config — `ZanixAdminHub.start()` calls this once at boot with whatever `options.triggers` it was
  * given (see its own docs); an app wiring this manually can call it directly instead. Which
- * Application (see `@zanix/server`'s `docs/HANDLERS.md`'s "Applications" section) this route
+ * Application (see `@zanix/server`'s `docs/APPLICATIONS.md`) this route
  * belongs to is decided by whichever `defineApplication(...)` scope is active when this call runs,
  * not by an option here — see `ZanixAdminHub.start()`'s own docs (`triggers.application`) for how
  * that's controlled. Unlike `createTriggersAdminController` (a business service's own local triggers,
@@ -73,42 +84,59 @@ export function createTriggersController(
       return getTriggersAggregator().list()
     }
 
-    @Get(':service_id/:model', { Params: TriggerServiceModelParamsRTO })
+    @Get(':serviceId/:model', { Params: TriggerServiceModelParamsRTO })
     @AuthTokenValidation({ permissions: REQUIRED_ROLE, type: AUTH_TYPES })
     public get(
       ctx: HandlerContext<{ params: TriggerServiceModelParamsRTO }>,
     ): Promise<TriggersModelAttrs> {
-      const { service_id, model } = ctx.payload.params
-      return getTriggersAggregator().get(service_id, model)
+      const { serviceId, model } = ctx.payload.params
+      return getTriggersAggregator().get(serviceId, model)
     }
 
-    @Post(':service_id', { Body: CreateTriggerRTO, Params: TriggerServiceParamsRTO })
+    @Post(':serviceId', {
+      Body: CreateTriggerRTO,
+      Params: TriggerServiceParamsRTO,
+    })
     @AuthTokenValidation({ permissions: REQUIRED_ROLE, type: AUTH_TYPES })
     public create(
-      ctx: HandlerContext<{ body: CreateTriggerRTO; params: TriggerServiceParamsRTO }>,
+      ctx: HandlerContext<
+        { body: CreateTriggerRTO; params: TriggerServiceParamsRTO }
+      >,
     ): Promise<TriggersModelAttrs> {
-      const { service_id } = ctx.payload.params
+      const { serviceId } = ctx.payload.params
       const { model, active, triggers } = ctx.payload.body
-      return getTriggersAggregator().create(service_id, { model, active, triggers })
+      return getTriggersAggregator().create(serviceId, {
+        model,
+        active,
+        triggers,
+      })
     }
 
-    @Put(':service_id/:model', { Body: UpdateTriggerRTO, Params: TriggerServiceModelParamsRTO })
+    @Put(':serviceId/:model', {
+      Body: UpdateTriggerRTO,
+      Params: TriggerServiceModelParamsRTO,
+    })
     @AuthTokenValidation({ permissions: REQUIRED_ROLE, type: AUTH_TYPES })
     public update(
-      ctx: HandlerContext<{ body: UpdateTriggerRTO; params: TriggerServiceModelParamsRTO }>,
+      ctx: HandlerContext<
+        { body: UpdateTriggerRTO; params: TriggerServiceModelParamsRTO }
+      >,
     ): Promise<TriggersModelAttrs> {
-      const { service_id, model } = ctx.payload.params
+      const { serviceId, model } = ctx.payload.params
       const { active, triggers } = ctx.payload.body
-      return getTriggersAggregator().update(service_id, model, { active, triggers })
+      return getTriggersAggregator().update(serviceId, model, {
+        active,
+        triggers,
+      })
     }
 
-    @Delete(':service_id/:model', { Params: TriggerServiceModelParamsRTO })
+    @Delete(':serviceId/:model', { Params: TriggerServiceModelParamsRTO })
     @AuthTokenValidation({ permissions: REQUIRED_ROLE, type: AUTH_TYPES })
     public async remove(
       ctx: HandlerContext<{ params: TriggerServiceModelParamsRTO }>,
     ): Promise<{ deleted: string }> {
-      const { service_id, model } = ctx.payload.params
-      await getTriggersAggregator().remove(service_id, model)
+      const { serviceId, model } = ctx.payload.params
+      await getTriggersAggregator().remove(serviceId, model)
       return { deleted: model }
     }
   }

@@ -42,6 +42,32 @@ export const ADMIN_APPLICATION = 'admin'
 export const ADMIN_HUB_APPLICATION = 'admin-hub'
 
 /**
+ * Own Zanix App identity for the hub's Triggers `operations`/`mcp` surface
+ * ({@link ADMIN_HUB_APPLICATION}'s own physically-separate sub-module — see
+ * `triggers/hub-triggers-app.ts`) — distinct from {@link ADMIN_HUB_APPLICATION} so this sub-app can, in
+ * principle, be activated/addressed (`ctx.remote(...)`) and eventually deployed independently of
+ * the hub's own REST controllers, which stay registered under {@link ADMIN_HUB_APPLICATION} itself.
+ * Never a REST route prefix on its own — `routes: false`; only the auto-registered
+ * `/__zanix-ops/admin-hub-triggers/...` dispatch controller (see `registerRemoteDispatchRoutes`)
+ * uses this name, baked directly into its own path independent of anchoring/`globalPrefix`.
+ */
+export const ADMIN_HUB_TRIGGERS_APPLICATION = 'admin-hub-triggers'
+
+/** Same reasoning as {@link ADMIN_HUB_TRIGGERS_APPLICATION}, for the hub's Templates `operations`
+ * sub-module (`templates/hub-templates-app.ts`). */
+export const ADMIN_HUB_TEMPLATES_APPLICATION = 'admin-hub-templates'
+
+/** Own Zanix App identity for the embedded, business-service-side Triggers `operations`/`mcp`
+ * surface ({@link ADMIN_APPLICATION}'s own physically-separate sub-module — see
+ * `triggers/local-triggers-app.ts`) — same reasoning as {@link ADMIN_HUB_TRIGGERS_APPLICATION},
+ * mirrored on the local side. */
+export const ADMIN_TRIGGERS_APPLICATION = 'admin-triggers'
+
+/** Same reasoning as {@link ADMIN_TRIGGERS_APPLICATION}, for the local Templates `operations`
+ * sub-module (`templates/local-templates-app.ts`). */
+export const ADMIN_TEMPLATES_APPLICATION = 'admin-templates'
+
+/**
  * Env var overriding which Application `/admin/triggers` is composed under — defaults to
  * {@link ADMIN_APPLICATION} (see `@zanix/core`'s `docs/admin-apis.md`'s "Scope" section); set to `'main'` (or any
  * other Application name) to rebind this one capability onto a different Application's Runtime

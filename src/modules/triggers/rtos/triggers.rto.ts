@@ -2,23 +2,26 @@ import type { CreateTriggerInput, Triggers, UpdateTriggerInput } from '@zanix/da
 
 import { BaseRTO, Expose, IsBoolean, IsString } from '@zanix/validator'
 
-/** Route params for a service-scoped operation with no `model` yet (e.g. `POST /triggers/:service_id`). */
+/** Route params for a service-scoped operation with no `model` yet (e.g. `POST /triggers/:serviceId`).
+ * `serviceId` (camelCase) — safe now that `@zanix/server`'s router preserves a route param's own
+ * NAME casing (previously required snake_case here, since a camelCase param name silently arrived
+ * as `undefined`; see that fix's own changelog entry). */
 export class TriggerServiceParamsRTO extends BaseRTO {
   @IsString({ expose: true })
-  accessor service_id!: string
+  accessor serviceId!: string
 }
 
 /** Route params for a single trigger entry on a given service. */
 export class TriggerServiceModelParamsRTO extends BaseRTO {
   @IsString({ expose: true })
-  accessor service_id!: string
+  accessor serviceId!: string
 
   @IsString({ expose: true })
   accessor model!: string
 }
 
 /**
- * Body validation shared by this proxy's `POST /triggers/:service_id` and `@zanix/core`'s own
+ * Body validation shared by this proxy's `POST /triggers/:serviceId` and `@zanix/core`'s own
  * local `POST /admin/triggers` — the same wire shape, since a proxying request forwards this body
  * to the target service's own admin API unchanged.
  */
@@ -35,7 +38,7 @@ export class CreateTriggerRTO extends BaseRTO implements CreateTriggerInput {
   accessor triggers!: Triggers
 }
 
-/** Body validation shared by this proxy's `PUT /triggers/:service_id/:model` and `@zanix/core`'s
+/** Body validation shared by this proxy's `PUT /triggers/:serviceId/:model` and `@zanix/core`'s
  * own local `PUT /admin/triggers/:model` — see {@link CreateTriggerRTO}. */
 export class UpdateTriggerRTO extends BaseRTO implements UpdateTriggerInput {
   @IsBoolean({ optional: true, expose: true })

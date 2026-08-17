@@ -35,15 +35,16 @@ export type TriggersDiscoveryClientFactory = (
 const defaultClientFactory: TriggersClientFactory = (service) =>
   new TriggersAdminClient({ baseUrl: service.adminBaseUrl })
 
-const defaultDiscoveryClientFactory: TriggersDiscoveryClientFactory = (service) =>
-  new DiscoveryAdminClient({ baseUrl: service.adminBaseUrl })
+const defaultDiscoveryClientFactory: TriggersDiscoveryClientFactory = (
+  service,
+) => new DiscoveryAdminClient({ baseUrl: service.adminBaseUrl })
 
 /**
  * `zanix-admin`'s triggers **proxy/aggregator** — it never owns or duplicates any service's
  * `zanix-triggers` collection: `list()` fans out to every registered service's own
  * `/.well-known/zanix/triggers` Discovery snapshot and merges the results tagged by origin
  * service (a plain read, so it goes through Discovery rather than the CRUD API — see
- * `@zanix/server`'s `docs/HANDLERS.md`'s "Discovery" section); every other operation resolves
+ * `@zanix/server`'s `docs/APPLICATIONS.md`'s "Discovery" section); every other operation resolves
  * which service owns the given `model` (via the caller-supplied `serviceId`) and proxies straight
  * to that service's own `/admin/triggers` CRUD API — this class never touches another service's
  * database directly.
@@ -59,6 +60,10 @@ export class TriggersAggregator {
   #createClient: TriggersClientFactory
   #createDiscoveryClient: TriggersDiscoveryClientFactory
 
+  /**
+   * Builds the aggregator against `registry`, defaulting `clientFactory`/`discoveryClientFactory`
+   * to unauthenticated `TriggersAdminClient`/`DiscoveryAdminClient` instances when not given.
+   */
   constructor(
     registry: ServiceRegistry,
     clientFactory: TriggersClientFactory = defaultClientFactory,
@@ -80,14 +85,20 @@ export class TriggersAggregator {
     const perService = await Promise.all(services.map(async (service) => {
       const client = await this.#createDiscoveryClient(service)
       const triggers = await client.snapshot<TriggersModelAttrs>('triggers')
-      return triggers.map((trigger) => ({ ...trigger, serviceId: service.serviceId }))
+      return triggers.map((trigger) => ({
+        ...trigger,
+        serviceId: service.serviceId,
+      }))
     }))
 
     return perService.flat()
   }
 
   /** Gets a single trigger entry from the given service. */
-  public async get(serviceId: string, model: string): Promise<TriggersModelAttrs> {
+  public async get(
+    serviceId: string,
+    model: string,
+  ): Promise<TriggersModelAttrs> {
     const service = this.#registry.get(serviceId)
     const client = await this.#createClient(service)
     return client.get(model)
@@ -137,6 +148,8 @@ export const setTriggersAggregator = (aggregator: TriggersAggregator): void => {
 
 /** Returns the installed {@link TriggersAggregator}, lazily building a default one if none was set. */
 export const getTriggersAggregator = (): TriggersAggregator => {
-  if (!activeAggregator) activeAggregator = new TriggersAggregator(getServiceRegistry())
+  if (!activeAggregator) {
+    activeAggregator = new TriggersAggregator(getServiceRegistry())
+  }
   return activeAggregator
 }

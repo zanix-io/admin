@@ -15,14 +15,31 @@ const jsonResponse = (body: unknown, status = 200) =>
     }),
   )
 
+Deno.test('DiscoveryAdminClient accepts a bare contextId string (RestClient shape)', () => {
+  const client = new DiscoveryAdminClient('svc-context')
+
+  assertEquals(client instanceof DiscoveryAdminClient, true)
+})
+
 Deno.test('DiscoveryAdminClient.snapshot GETs the endpoint, unwraps items', async () => {
-  const items = [{ model: 'User', active: true, triggers: {}, isDefault: false }]
+  const items = [{
+    model: 'User',
+    active: true,
+    triggers: {},
+    isDefault: false,
+  }]
   const mockFetch = spy((_url: string, _opts: any) =>
-    jsonResponse({ resourceType: 'triggers', generatedAt: '2026-01-01T00:00:00.000Z', items })
+    jsonResponse({
+      resourceType: 'triggers',
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      items,
+    })
   )
   globalThis.fetch = mockFetch as unknown as typeof fetch
 
-  const client = new DiscoveryAdminClient({ baseUrl: 'http://svc.internal:1234' })
+  const client = new DiscoveryAdminClient({
+    baseUrl: 'http://svc.internal:1234',
+  })
   const result = await client.snapshot('triggers')
 
   assertEquals(result, items)

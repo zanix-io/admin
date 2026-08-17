@@ -24,7 +24,10 @@ Deno.test({
     Deno.env.delete(DATABASE_TEMPLATES_ENV)
 
     const [serverId] = await bootstrapServers({
-      rest: { application: ADMIN_APPLICATION, id: 'metadata-templates-db-disabled-test' },
+      rest: {
+        application: ADMIN_APPLICATION,
+        id: 'metadata-templates-db-disabled-test',
+      },
     })
     assert(serverId, 'the admin REST server should have been started')
 

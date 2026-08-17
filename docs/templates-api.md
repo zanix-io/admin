@@ -40,11 +40,11 @@ instead of pushing its templates as a payload, it just tells this endpoint _whic
 service_ to pull from:
 
 ```typescript
-// Body: { service_id: string }
+// Body: { serviceId: string }
 // Response: { seeded: number; resynced: number }
 ```
 
-`service_id` is looked up in the shared `ServiceRegistry` (see
+`serviceId` is looked up in the shared `ServiceRegistry` (see
 [Service Registry](./service-registry.md) — the same registry `TriggersAggregator` uses), resolving
 that service's own base URL. This package then pulls from whichever of two Discovery resources that
 service exposes, **preferring the richer one**:
@@ -80,6 +80,28 @@ importing `TemplatesAdminClient` from `@zanix/notifications` would be circular (
 already depends on `@zanix/notifications` for `ZanixTemplateAttrs`/`Notifiers`). Either way, the
 central service must have `RemoteTemplateBackend`'s own `serviceId` registered in its
 `ServiceRegistry` first, mapped to a base URL reachable for that service's own Discovery endpoint.
+
+---
+
+## `createTemplatesDiscoveryGuard` — one guard, shared by two Discovery endpoints
+
+`createTemplatesDiscoveryGuard()` builds the default `ADMIN_ROLE`/`ADMIN_TEMPLATES_ROLE` guard this
+package's own `/.well-known/zanix/templates` Discovery endpoint (above) requires. It's exported so
+`@zanix/core`'s own `codeTemplatesDiscovery` option — the static, in-code catalog exposed at
+`/.well-known/zanix/code-templates` — can require the exact same role, rather than re-inlining an
+equivalent `jwtValidationGuard(...)` call that could quietly drift out of sync with this one over
+time:
+
+```typescript
+import { createTemplatesDiscoveryGuard } from 'jsr:@zanix/admin@[version]'
+
+// Passed as `codeTemplatesDiscovery`'s own guard option — see `@zanix/core`'s README.
+const guard = createTemplatesDiscoveryGuard()
+```
+
+The two Discovery resources are different data (this package's own live, DB-backed records vs. a
+business service's static in-code catalog), but "who's allowed to read a template list" is the same
+question either way.
 
 ---
 

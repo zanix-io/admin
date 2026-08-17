@@ -28,7 +28,10 @@ import { ServiceRegistry, setServiceRegistry } from 'jsr:@zanix/admin@[version]'
 
 setServiceRegistry(
   new ServiceRegistry([
-    { serviceId: 'billing', adminBaseUrl: 'http://billing.internal:30248/billing-rest' },
+    {
+      serviceId: 'billing',
+      adminBaseUrl: 'http://billing.internal:30248/billing-rest',
+    },
   ]),
 )
 ```

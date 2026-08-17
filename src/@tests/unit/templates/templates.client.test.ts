@@ -29,10 +29,16 @@ Deno.test('TemplatesAdminClient.list GETs /admin/templates/list', async () => {
   )
   globalThis.fetch = mockFetch as unknown as typeof fetch
 
-  const client = new TemplatesAdminClient({ baseUrl: 'http://svc.internal:1234' })
+  const client = new TemplatesAdminClient({
+    baseUrl: 'http://svc.internal:1234',
+  })
   const result = await client.list()
 
-  assertEquals(result, [{ channel: 'email', name: 'welcome', ...TEMPLATE_DEFAULTS }])
+  assertEquals(result, [{
+    channel: 'email',
+    name: 'welcome',
+    ...TEMPLATE_DEFAULTS,
+  }])
   const [url, opts] = mockFetch.calls[0].args as [string, any]
   assertEquals(url, 'http://svc.internal:1234/admin/templates/list')
   assertEquals(opts.method, 'GET')
@@ -44,10 +50,16 @@ Deno.test('TemplatesAdminClient.get GETs /admin/templates/:channel/:name', async
   )
   globalThis.fetch = mockFetch as unknown as typeof fetch
 
-  const client = new TemplatesAdminClient({ baseUrl: 'http://svc.internal:1234' })
+  const client = new TemplatesAdminClient({
+    baseUrl: 'http://svc.internal:1234',
+  })
   const result = await client.get('email', 'welcome')
 
-  assertEquals(result, { channel: 'email', name: 'welcome', ...TEMPLATE_DEFAULTS })
+  assertEquals(result, {
+    channel: 'email',
+    name: 'welcome',
+    ...TEMPLATE_DEFAULTS,
+  })
   const [url] = mockFetch.calls[0].args as [string, any]
   assertEquals(url, 'http://svc.internal:1234/admin/templates/email/welcome')
 })
@@ -55,12 +67,18 @@ Deno.test('TemplatesAdminClient.get GETs /admin/templates/:channel/:name', async
 Deno.test('TemplatesAdminClient.create POSTs the input as the body, no updatedBy', async () => {
   const mockFetch = spy((_url: string, opts: any) => {
     assertEquals(opts.method, 'POST')
-    assertEquals(JSON.parse(opts.body), { channel: 'email', name: 'welcome', hbs: '<p>hi</p>' })
+    assertEquals(JSON.parse(opts.body), {
+      channel: 'email',
+      name: 'welcome',
+      hbs: '<p>hi</p>',
+    })
     return jsonResponse({ channel: 'email', name: 'welcome' }, 201)
   })
   globalThis.fetch = mockFetch as unknown as typeof fetch
 
-  const client = new TemplatesAdminClient({ baseUrl: 'http://svc.internal:1234' })
+  const client = new TemplatesAdminClient({
+    baseUrl: 'http://svc.internal:1234',
+  })
   await client.create({ channel: 'email', name: 'welcome', hbs: '<p>hi</p>' })
 
   assertSpyCalls(mockFetch, 1)
@@ -79,7 +97,9 @@ Deno.test('TemplatesAdminClient.update PUTs the given changes', async () => {
   })
   globalThis.fetch = mockFetch as unknown as typeof fetch
 
-  const client = new TemplatesAdminClient({ baseUrl: 'http://svc.internal:1234' })
+  const client = new TemplatesAdminClient({
+    baseUrl: 'http://svc.internal:1234',
+  })
   const result = await client.update('email', 'welcome', { hbs: '<p>new</p>' })
 
   assertEquals(result, {
@@ -92,6 +112,12 @@ Deno.test('TemplatesAdminClient.update PUTs the given changes', async () => {
   assertEquals(url, 'http://svc.internal:1234/admin/templates/email/welcome')
 })
 
+Deno.test('TemplatesAdminClient accepts a bare contextId string (RestClient shape)', () => {
+  const client = new TemplatesAdminClient('svc-context')
+
+  assertEquals(client instanceof TemplatesAdminClient, true)
+})
+
 Deno.test('TemplatesAdminClient.remove DELETEs /admin/templates/:channel/:name', async () => {
   const mockFetch = spy((_url: string, opts: any) => {
     assertEquals(opts.method, 'DELETE')
@@ -99,21 +125,25 @@ Deno.test('TemplatesAdminClient.remove DELETEs /admin/templates/:channel/:name',
   })
   globalThis.fetch = mockFetch as unknown as typeof fetch
 
-  const client = new TemplatesAdminClient({ baseUrl: 'http://svc.internal:1234' })
+  const client = new TemplatesAdminClient({
+    baseUrl: 'http://svc.internal:1234',
+  })
   await client.remove('email', 'welcome')
 
   assertSpyCalls(mockFetch, 1)
 })
 
-Deno.test('TemplatesAdminClient.sync POSTs {service_id}, returns summary', async () => {
+Deno.test('TemplatesAdminClient.sync POSTs {serviceId}, returns summary', async () => {
   const mockFetch = spy((_url: string, opts: any) => {
     assertEquals(opts.method, 'POST')
-    assertEquals(JSON.parse(opts.body), { service_id: 'billing' })
+    assertEquals(JSON.parse(opts.body), { serviceId: 'billing' })
     return jsonResponse({ seeded: 1, resynced: 0 })
   })
   globalThis.fetch = mockFetch as unknown as typeof fetch
 
-  const client = new TemplatesAdminClient({ baseUrl: 'http://svc.internal:1234' })
+  const client = new TemplatesAdminClient({
+    baseUrl: 'http://svc.internal:1234',
+  })
   const result = await client.sync('billing')
 
   assertEquals(result, { seeded: 1, resynced: 0 })

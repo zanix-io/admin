@@ -9,10 +9,10 @@ interface DiscoveryEnvelope<T> {
 
 /**
  * Thin HTTP client for a registered service's own `/.well-known/zanix/{resourceType}` Discovery
- * endpoint — see `@zanix/server`'s `docs/HANDLERS.md`'s "Discovery" section. Used to fetch a
+ * endpoint — see `@zanix/server`'s `docs/APPLICATIONS.md`'s "Discovery" section. Used to fetch a
  * read-only snapshot from a service this package doesn't own the data for (`TriggersAggregator`'s
- * `list()`, and `TemplatesAdminService`'s `syncCodeTemplatesFromService`), rather than proxying
- * through that service's authenticated CRUD API for a plain read.
+ * `list()`, and `syncTemplatesFromRegisteredService`), rather than proxying through that service's
+ * authenticated CRUD API for a plain read.
  *
  * Every request declares {@link DISCOVERY_PROTOCOL_VERSION} via {@link DISCOVERY_PROTOCOL_HEADER}
  * automatically — override it in `options.headers` only if you have a specific reason to declare a
@@ -32,17 +32,24 @@ interface DiscoveryEnvelope<T> {
 export class DiscoveryAdminClient extends RestClient {
   /** Creates the client, stamping every request with {@link DISCOVERY_PROTOCOL_VERSION}. */
   constructor(
-    { headers, ...options }: NonNullable<ConstructorParameters<typeof RestClient>[0]> = {},
+    options: NonNullable<ConstructorParameters<typeof RestClient>[0]> = {},
   ) {
+    const { headers, ...opts } = typeof options === 'string' ? { contextId: options } : options
+
     super({
-      ...options,
-      headers: { [DISCOVERY_PROTOCOL_HEADER]: String(DISCOVERY_PROTOCOL_VERSION), ...headers },
+      ...opts,
+      headers: {
+        [DISCOVERY_PROTOCOL_HEADER]: String(DISCOVERY_PROTOCOL_VERSION),
+        ...headers,
+      },
     })
   }
 
   /** Fetches the current snapshot for `resourceType`, unwrapped from its envelope. */
   public async snapshot<T>(resourceType: string): Promise<T[]> {
-    const envelope = await this.http.get<DiscoveryEnvelope<T>>(`.well-known/zanix/${resourceType}`)
+    const envelope = await this.http.get<DiscoveryEnvelope<T>>(
+      `.well-known/zanix/${resourceType}`,
+    )
     return envelope.items
   }
 }

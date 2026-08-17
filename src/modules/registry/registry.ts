@@ -5,8 +5,8 @@ import { InternalError } from '@zanix/errors'
 /**
  * Env var carrying the static service registry as a JSON array of {@link ServiceRegistryEntry} —
  * e.g. `[{"serviceId":"billing","adminBaseUrl":"http://billing.internal:30248/billing-rest"}]`.
- * Merged with (and overridden by, on a `serviceId` collision) whatever entries are passed directly
- * to {@link ServiceRegistry}'s constructor.
+ * Merged with whatever entries are passed directly to {@link ServiceRegistry}'s constructor —
+ * on a `serviceId` collision, this env var's entry overrides the constructor one.
  */
 export const SERVICE_REGISTRY_ENV = 'ZANIX_ADMIN_SERVICES'
 
@@ -27,6 +27,8 @@ export class ServiceRegistry {
   #entries = new Map<string, ServiceRegistryEntry>()
 
   /**
+   * Builds the registry, seeding it with `entries` and then merging in whatever
+   * {@link SERVICE_REGISTRY_ENV} provides.
    * @param entries - Service entries known upfront. Entries from {@link SERVICE_REGISTRY_ENV} are
    * added after these, so an env-configured entry overrides a same-`serviceId` one passed here.
    */
@@ -44,10 +46,13 @@ export class ServiceRegistry {
     const entry = this.#entries.get(serviceId)
 
     if (!entry) {
-      throw new InternalError(`No registered service found for "${serviceId}".`, {
-        code: 'UNKNOWN_SERVICE',
-        meta: { source: 'zanix', serviceId },
-      })
+      throw new InternalError(
+        `No registered service found for "${serviceId}".`,
+        {
+          code: 'UNKNOWN_SERVICE',
+          meta: { source: 'zanix', serviceId },
+        },
+      )
     }
 
     return entry
@@ -67,13 +72,25 @@ export class ServiceRegistry {
 let activeRegistry: ServiceRegistry | undefined
 
 /**
- * Installs the {@link ServiceRegistry} instance shared by every consumer that needs to know about
- * registered business services — `TriggersAggregator` (fanning out `/admin/triggers`/Discovery
- * reads) and `TemplatesAdminService` (pulling a service's own code-templates Discovery snapshot)
- * both resolve the same installed instance via {@link getServiceRegistry}, rather than each holding
- * an independent one that could drift out of sync. Call once during startup; unset,
- * {@link getServiceRegistry} falls back to a default instance (entries from
- * {@link SERVICE_REGISTRY_ENV} only).
+ * Installs the process-wide {@link ServiceRegistry} instance — the deliberate, necessary
+ * configuration point for BOTH ways this package supports initializing:
+ *
+ * 1. `ZanixAdminHub.start()` → `defineAdminHubApp()` → a real `@zanix/app` DI graph, where
+ *    `ctx.resource('registry')` resolves this same instance (see `./resource-type.ts`'s
+ *    `'service-registry'` resource factory, which calls this function as its own last step — so a
+ *    Zanix App's `ctx.resource('registry')` and this module's {@link getServiceRegistry} always
+ *    agree on the exact same instance, by construction, never two independently-built ones).
+ * 2. Wiring `createTriggersController()`/`createTemplatesController()` directly into a caller's own
+ *    `@zanix/core`/`@zanix/server` bootstrap, with no Zanix App, no manifest, and consequently no DI
+ *    graph at all (see this package's own module doc, `mod.ts`) — for that path there is no
+ *    `ctx.resource()` to resolve anything from, so this plain function is the ONLY configuration
+ *    entrypoint available, not a fallback for a DI mechanism this path could use instead.
+ *
+ * `TriggersAggregator`/`syncTemplatesFromRegisteredService`/`checkServiceRegistryReachability` all
+ * read the same installed instance via {@link getServiceRegistry}, so both paths above end up
+ * sharing one registry rather than each holding an independent one that could drift out of sync.
+ * Call once during startup; unset, {@link getServiceRegistry} falls back to a default instance
+ * (entries from {@link SERVICE_REGISTRY_ENV} only).
  */
 export const setServiceRegistry = (registry: ServiceRegistry): void => {
   activeRegistry = registry
@@ -94,10 +111,13 @@ function readFromEnv(): ServiceRegistryEntry[] {
     if (!Array.isArray(parsed)) throw new Error('not an array')
     return parsed
   } catch (cause) {
-    throw new InternalError(`${SERVICE_REGISTRY_ENV} is not a valid JSON array.`, {
-      code: 'INVALID_SERVICE_REGISTRY',
-      cause,
-      meta: { source: 'zanix' },
-    })
+    throw new InternalError(
+      `${SERVICE_REGISTRY_ENV} is not a valid JSON array.`,
+      {
+        code: 'INVALID_SERVICE_REGISTRY',
+        cause,
+        meta: { source: 'zanix' },
+      },
+    )
   }
 }

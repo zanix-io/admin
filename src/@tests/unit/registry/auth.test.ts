@@ -22,7 +22,11 @@ Deno.test({
 
     const mockFetch = spy((url: string) => {
       calledUrl = url
-      return jsonResponse({ accessToken: 'tok', expiresIn: 1800, serviceId: 'billing' })
+      return jsonResponse({
+        accessToken: 'tok',
+        expiresIn: 1800,
+        serviceId: 'billing',
+      })
     })
     globalThis.fetch = mockFetch as unknown as typeof fetch
 
@@ -37,7 +41,10 @@ Deno.test({
       adminBaseUrl: 'http://localhost:9091/server-id-rest',
     })
 
-    assertEquals(calledUrl, 'http://localhost:9091/server-id-rest/admin/service-token')
+    assertEquals(
+      calledUrl,
+      'http://localhost:9091/server-id-rest/admin/service-token',
+    )
     assertEquals(headers, { 'X-Znx-Authorization': 'Bearer tok' })
     assertSpyCalls(mockFetch, 1)
   },
@@ -51,7 +58,11 @@ Deno.test({
     let call = 0
     globalThis.fetch = (() => {
       call++
-      return jsonResponse({ accessToken: `tok-${call}`, expiresIn: 1800, serviceId: 'x' })
+      return jsonResponse({
+        accessToken: `tok-${call}`,
+        expiresIn: 1800,
+        serviceId: 'x',
+      })
     }) as unknown as typeof fetch
 
     const authHeaders = createServiceRegistryAuthHeaders({

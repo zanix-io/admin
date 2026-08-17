@@ -7,17 +7,19 @@ import {
   UpdateTriggerRTO,
 } from 'modules/triggers/rtos/triggers.rto.ts'
 
-Deno.test('TriggerServiceParamsRTO validates a plain "service_id" string', async () => {
-  const rto = await classValidation(TriggerServiceParamsRTO, { service_id: 'billing' })
-  assertEquals(rto.service_id, 'billing')
+Deno.test('TriggerServiceParamsRTO validates a plain "serviceId" string', async () => {
+  const rto = await classValidation(TriggerServiceParamsRTO, {
+    serviceId: 'billing',
+  })
+  assertEquals(rto.serviceId, 'billing')
 })
 
-Deno.test('TriggerServiceModelParamsRTO validates "service_id" and "model"', async () => {
+Deno.test('TriggerServiceModelParamsRTO validates "serviceId" and "model"', async () => {
   const rto = await classValidation(TriggerServiceModelParamsRTO, {
-    service_id: 'billing',
+    serviceId: 'billing',
     model: 'zanix-triggers',
   })
-  assertEquals(rto.service_id, 'billing')
+  assertEquals(rto.serviceId, 'billing')
   assertEquals(rto.model, 'zanix-triggers')
 })
 

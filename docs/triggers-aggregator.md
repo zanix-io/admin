@@ -7,13 +7,13 @@ fan-out/proxy logic:
 | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
 | `list()`                            | Fans out to **every** registered service's own `/.well-known/zanix/triggers` Discovery snapshot, tagged by `serviceId`. |
 | `get(serviceId, model)`             | Proxies to the one resolved service's CRUD API.                                                                         |
-| `create(serviceId, model, ...)`     | Proxies to the one resolved service's CRUD API.                                                                         |
+| `create(serviceId, input)`          | Proxies to the one resolved service's CRUD API (`input` is `{model, active, triggers}`).                                |
 | `update(serviceId, model, changes)` | Proxies to the one resolved service's CRUD API.                                                                         |
 | `remove(serviceId, model)`          | Proxies to the one resolved service's CRUD API.                                                                         |
 
 `list()` reads from Discovery rather than the CRUD API's own `/admin/triggers/list` — a read-only
 operation goes through the read-only protocol; every other method mutates or targets a single entry,
-so it stays on the CRUD API. See `@zanix/server`'s `docs/HANDLERS.md`'s "Discovery" section.
+so it stays on the CRUD API. See `@zanix/server`'s `docs/APPLICATIONS.md`'s "Discovery" section.
 
 **Authentication is a pluggable seam.** The aggregator's constructor takes two independent
 factories: `clientFactory` decides how each per-service `TriggersAdminClient` (CRUD) is built, and
@@ -27,7 +27,7 @@ own result before using the client.
 below.** `ZanixAdminHub.start({ auth: { serviceId, privateKey } })` installs an authenticated
 `TriggersAggregator` automatically via `@zanix/auth`'s `createServiceAuthClient` (adapted here by
 `createServiceRegistryAuthHeaders`) — see `docs/service-authentication.md`'s
-[`ZanixAdminHub.start({ auth })`](./service-authentication.md#zanixadminhubstart-auth) section.
+[`ZanixAdminHub.start({ auth })`](./service-authentication.md#zanixadminhubstart-auth-) section.
 Build the factories manually, as below, only when you need something that shortcut doesn't cover: a
 custom `ServiceRegistry`, partial-failure tolerance, or different credentials for CRUD vs. Discovery
 reads.
@@ -46,26 +46,37 @@ const tokenCache = new Map<string, { token: string; expiresAt: number }>()
 
 // The actual HTTP call to that service's own exchange endpoint (wrapping
 // @zanix/auth's exchangeServiceCredential — see its own docs) is up to your app.
-async function getAccessToken(serviceId: string, exchangeUrl: string): Promise<string> {
+async function getAccessToken(
+  serviceId: string,
+  exchangeUrl: string,
+): Promise<string> {
   const cached = tokenCache.get(serviceId)
   if (cached && cached.expiresAt > Date.now()) return cached.token
 
-  const assertion = await createServiceAssertion({ serviceId: 'zanix-admin', privateKey })
+  const assertion = await createServiceAssertion({
+    serviceId: 'zanix-admin',
+    privateKey,
+  })
   const response = await fetch(exchangeUrl, {
     method: 'POST',
     body: JSON.stringify({ assertion }),
   })
   const { accessToken, expiresIn } = await response.json()
-  tokenCache.set(serviceId, { token: accessToken, expiresAt: Date.now() + expiresIn * 1000 })
+  tokenCache.set(serviceId, {
+    token: accessToken,
+    expiresAt: Date.now() + expiresIn * 1000,
+  })
   return accessToken
 }
 
-const authHeaders = async (service: { serviceId: string; adminBaseUrl: string }) => ({
+const authHeaders = async (
+  service: { serviceId: string; adminBaseUrl: string },
+) => ({
   'X-Znx-Authorization': `Bearer ${await getAccessToken(
     service.serviceId,
     // Always `/admin/service-token` — `createServiceExchangeController`'s own fixed prefix,
     // regardless of the target service's own `server.rest.globalPrefix` (a completely separate
-    // Application/server from its embedded admin one — see `docs/HANDLERS.md`'s "Applications").
+    // Application/server from its embedded admin one — see `docs/APPLICATIONS.md`).
     `${service.adminBaseUrl}/admin/service-token`,
   )}`,
 })
@@ -73,7 +84,10 @@ const authHeaders = async (service: { serviceId: string; adminBaseUrl: string })
 const triggers = new TriggersAggregator(
   new ServiceRegistry([/* ... */]),
   async (service) =>
-    new TriggersAdminClient({ baseUrl: service.adminBaseUrl, headers: await authHeaders(service) }),
+    new TriggersAdminClient({
+      baseUrl: service.adminBaseUrl,
+      headers: await authHeaders(service),
+    }),
   // Third, independent factory for list()'s Discovery reads — same credential here, but it
   // doesn't have to be: a deployment could leave this one unauthenticated while still requiring
   // auth for CRUD, or vice versa.
@@ -97,13 +111,13 @@ tolerance on top instead.
 [`TemplatesController`](./templates-api.md)), calling into whichever `TriggersAggregator` is
 currently installed:
 
-| Route                                 | Behavior                                                         |
-| ------------------------------------- | ---------------------------------------------------------------- |
-| `GET /triggers`                       | `list()` — fanned out across every service's Discovery snapshot. |
-| `GET /triggers/:service_id/:model`    | `get(serviceId, model)`.                                         |
-| `POST /triggers/:service_id`          | `create(serviceId, body.model, body.active, body.triggers)`.     |
-| `PUT /triggers/:service_id/:model`    | `update(serviceId, model, { active?, triggers? })`.              |
-| `DELETE /triggers/:service_id/:model` | `remove(serviceId, model)`.                                      |
+| Route                                | Behavior                                                         |
+| ------------------------------------ | ---------------------------------------------------------------- |
+| `GET /triggers`                      | `list()` — fanned out across every service's Discovery snapshot. |
+| `GET /triggers/:serviceId/:model`    | `get(serviceId, model)`.                                         |
+| `POST /triggers/:serviceId`          | `create(serviceId, body.model, body.active, body.triggers)`.     |
+| `PUT /triggers/:serviceId/:model`    | `update(serviceId, model, { active?, triggers? })`.              |
+| `DELETE /triggers/:serviceId/:model` | `remove(serviceId, model)`.                                      |
 
 Install a real (authenticated) aggregator with `setTriggersAggregator` **before**
 `ZanixAdminHub.start()` — left unset, the controller falls back to a default `TriggersAggregator`
@@ -126,6 +140,33 @@ Requires `ADMIN_ROLE`/`ADMIN_TRIGGERS_ROLE` (both defined in this package, and r
 `@zanix/core` for a business service's own use) and accepts either a human admin's `type: 'user'`
 token or a machine caller's `type: 'api'` one — same auth model as
 [`TemplatesController`](./templates-api.md).
+
+---
+
+## `createTriggersAdminController` — a business service's own local `/admin/triggers`
+
+Don't confuse this with `createTriggersController`/`TriggersAggregator` above — it's the other side
+of the same wire protocol. `createTriggersAdminController` builds the CRUD controller a **business
+service itself** exposes at a fixed `admin/triggers` prefix, backed directly by
+`TriggersAdminService`/`TriggersAdminRepository` (both re-exported from `@zanix/database`, the
+actual owner of the `zanix-triggers` collection — exported here too so a consuming app can extend or
+reuse them without depending on `@zanix/database` directly). This is the target
+`TriggersAggregator`'s `TriggersAdminClient` calls into on the other end of the wire — this
+controller owns real persisted data, `TriggersAggregator` never does.
+
+```typescript
+import { createTriggersAdminController } from 'jsr:@zanix/admin@[version]'
+
+// Registers /admin/triggers under whichever Application scope is active when this runs — see
+// `@zanix/core`'s own `admin: true` option, which calls this automatically as part of
+// `defineAdminMetadata()`.
+createTriggersAdminController()
+```
+
+Requires the same `ADMIN_ROLE`/`ADMIN_TRIGGERS_ROLE` gate and `type: 'user'`/`type: 'api'` token
+acceptance as `TriggersController` above — only the underlying business logic differs (real CRUD vs.
+proxy). Registered under the `'admin'` Application by default; `ADMIN_TRIGGERS_APPLICATION`
+overrides which Application it's composed under instead (e.g. `'main'`).
 
 ---
 

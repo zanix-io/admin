@@ -8,7 +8,10 @@ import {
 } from 'modules/templates/rtos/templates.rto.ts'
 
 Deno.test('TemplateParamsRTO validates channel/name', async () => {
-  const rto = await classValidation(TemplateParamsRTO, { channel: 'email', name: 'welcome' })
+  const rto = await classValidation(TemplateParamsRTO, {
+    channel: 'email',
+    name: 'welcome',
+  })
   assertEquals(rto.channel, 'email')
   assertEquals(rto.name, 'welcome')
 })
@@ -69,12 +72,12 @@ Deno.test('UpdateTemplateRTO rejects a non-boolean active value', async () => {
   assert(threw)
 })
 
-Deno.test('SyncTemplatesRTO validates a plain "service_id" string', async () => {
+Deno.test('SyncTemplatesRTO validates a plain "serviceId" string', async () => {
   const rto = await classValidation(SyncTemplatesRTO, { serviceId: 'billing' })
   assertEquals(rto.serviceId, 'billing')
 })
 
-Deno.test('SyncTemplatesRTO rejects when service_id is missing entirely', async () => {
+Deno.test('SyncTemplatesRTO rejects when serviceId is missing entirely', async () => {
   let threw = false
   try {
     await classValidation(SyncTemplatesRTO, {})

@@ -23,7 +23,9 @@ Deno.test('TriggersAdminClient.list GETs /admin/triggers/list', async () => {
   )
   globalThis.fetch = mockFetch as unknown as typeof fetch
 
-  const client = new TriggersAdminClient({ baseUrl: 'http://svc.internal:1234' })
+  const client = new TriggersAdminClient({
+    baseUrl: 'http://svc.internal:1234',
+  })
   const result = await client.list()
 
   assertEquals(result, [{ model: 'User', ...TRIGGER_DEFAULTS }])
@@ -39,7 +41,9 @@ Deno.test('TriggersAdminClient.get GETs /admin/triggers/:model', async () => {
   )
   globalThis.fetch = mockFetch as unknown as typeof fetch
 
-  const client = new TriggersAdminClient({ baseUrl: 'http://svc.internal:1234' })
+  const client = new TriggersAdminClient({
+    baseUrl: 'http://svc.internal:1234',
+  })
   const result = await client.get('User')
 
   assertEquals(result, { model: 'User', ...TRIGGER_DEFAULTS })
@@ -50,7 +54,11 @@ Deno.test('TriggersAdminClient.get GETs /admin/triggers/:model', async () => {
 Deno.test('TriggersAdminClient.create POSTs model/active/triggers as the body', async () => {
   const mockFetch = spy((_url: string, opts: any) => {
     assertEquals(opts.method, 'POST')
-    assertEquals(JSON.parse(opts.body), { model: 'User', active: true, triggers: { pre: {} } })
+    assertEquals(JSON.parse(opts.body), {
+      model: 'User',
+      active: true,
+      triggers: { pre: {} },
+    })
     return jsonResponse(
       { model: 'User', active: true, triggers: { pre: {} }, isDefault: false },
       201,
@@ -58,10 +66,21 @@ Deno.test('TriggersAdminClient.create POSTs model/active/triggers as the body', 
   })
   globalThis.fetch = mockFetch as unknown as typeof fetch
 
-  const client = new TriggersAdminClient({ baseUrl: 'http://svc.internal:1234' })
-  const result = await client.create({ model: 'User', active: true, triggers: { pre: {} } })
+  const client = new TriggersAdminClient({
+    baseUrl: 'http://svc.internal:1234',
+  })
+  const result = await client.create({
+    model: 'User',
+    active: true,
+    triggers: { pre: {} },
+  })
 
-  assertEquals(result, { model: 'User', active: true, triggers: { pre: {} }, isDefault: false })
+  assertEquals(result, {
+    model: 'User',
+    active: true,
+    triggers: { pre: {} },
+    isDefault: false,
+  })
   assertSpyCalls(mockFetch, 1)
 })
 
@@ -73,12 +92,20 @@ Deno.test('TriggersAdminClient.update PUTs the given changes', async () => {
   })
   globalThis.fetch = mockFetch as unknown as typeof fetch
 
-  const client = new TriggersAdminClient({ baseUrl: 'http://svc.internal:1234' })
+  const client = new TriggersAdminClient({
+    baseUrl: 'http://svc.internal:1234',
+  })
   const result = await client.update('User', { active: false })
 
   assertEquals(result, { model: 'User', ...TRIGGER_DEFAULTS, active: false })
   const [url] = mockFetch.calls[0].args as [string, any]
   assertEquals(url, 'http://svc.internal:1234/admin/triggers/User')
+})
+
+Deno.test('TriggersAdminClient accepts a bare contextId string (RestClient shape)', () => {
+  const client = new TriggersAdminClient('svc-context')
+
+  assertEquals(client instanceof TriggersAdminClient, true)
 })
 
 Deno.test('TriggersAdminClient.remove DELETEs /admin/triggers/:model', async () => {
@@ -88,7 +115,9 @@ Deno.test('TriggersAdminClient.remove DELETEs /admin/triggers/:model', async () 
   })
   globalThis.fetch = mockFetch as unknown as typeof fetch
 
-  const client = new TriggersAdminClient({ baseUrl: 'http://svc.internal:1234' })
+  const client = new TriggersAdminClient({
+    baseUrl: 'http://svc.internal:1234',
+  })
   await client.remove('User')
 
   assertSpyCalls(mockFetch, 1)

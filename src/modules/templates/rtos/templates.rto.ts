@@ -3,6 +3,7 @@ import type { CreateTemplateInput, Notifiers, UpdateTemplateInput } from '@zanix
 import { BaseRTO, IsArray, IsBoolean, IsEnum, IsString } from '@zanix/validator'
 import { NOTIFIER_CHANNELS } from '@zanix/notifications'
 
+/** Route params for a single template entry (`GET`/`PUT`/`DELETE /admin/templates/:channel/:name`). */
 export class TemplateParamsRTO extends BaseRTO {
   @IsEnum(NOTIFIER_CHANNELS, { expose: true })
   accessor channel!: Notifiers
@@ -11,6 +12,7 @@ export class TemplateParamsRTO extends BaseRTO {
   accessor name!: string
 }
 
+/** Body validation for `POST /admin/templates`. */
 export class CreateTemplateRTO extends BaseRTO implements CreateTemplateInput {
   @IsEnum(NOTIFIER_CHANNELS, { expose: true })
   accessor channel!: Notifiers
@@ -28,6 +30,7 @@ export class CreateTemplateRTO extends BaseRTO implements CreateTemplateInput {
   accessor availableVariables: string[] | undefined
 }
 
+/** Body validation for `PUT /admin/templates/:channel/:name` — see {@link CreateTemplateRTO}. */
 export class UpdateTemplateRTO extends BaseRTO implements UpdateTemplateInput {
   @IsString({ optional: true, expose: true })
   accessor hbs: string | undefined

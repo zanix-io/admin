@@ -24,7 +24,11 @@ function codeTemplatesOnlyFetch(
     }
     return Promise.resolve(
       new Response(
-        JSON.stringify({ resourceType: 'code-templates', generatedAt: '', items }),
+        JSON.stringify({
+          resourceType: 'code-templates',
+          generatedAt: '',
+          items,
+        }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       ),
     )
@@ -53,7 +57,10 @@ Deno.test({
     "syncTemplatesFromRegisteredService falls back to code-templates when the target has no DB-backed templates ('templates' 404s), merges via TemplatesAdminRepository.syncCodeTemplates",
   fn: async () => {
     setServiceRegistry(
-      new ServiceRegistry([{ serviceId: 'billing', adminBaseUrl: 'http://billing.internal' }]),
+      new ServiceRegistry([{
+        serviceId: 'billing',
+        adminBaseUrl: 'http://billing.internal',
+      }]),
     )
     const fetchStub = stub(
       globalThis,
@@ -69,11 +76,17 @@ Deno.test({
     const providersStub = stubSyncCodeTemplates(syncCalls)
 
     try {
-      const result = await syncTemplatesFromRegisteredService('billing', 'admin-1')
+      const result = await syncTemplatesFromRegisteredService(
+        'billing',
+        'admin-1',
+      )
 
       assertEquals(result, { seeded: 1, resynced: 0 })
       assertEquals(syncCalls, [
-        [[{ channel: 'email', name: 'generic', hbs: '<p>hi</p>', hash: 'h1' }], 'admin-1'],
+        [
+          [{ channel: 'email', name: 'generic', hbs: '<p>hi</p>', hash: 'h1' }],
+          'admin-1',
+        ],
       ])
       // Both resources are attempted, in order — 'templates' first (404s), 'code-templates' next.
       assertEquals(
@@ -95,7 +108,10 @@ Deno.test({
     "syncTemplatesFromRegisteredService prefers 'templates' (DB-backed, real content) over 'code-templates' when the target exposes it",
   fn: async () => {
     setServiceRegistry(
-      new ServiceRegistry([{ serviceId: 'billing', adminBaseUrl: 'http://billing.internal' }]),
+      new ServiceRegistry([{
+        serviceId: 'billing',
+        adminBaseUrl: 'http://billing.internal',
+      }]),
     )
     const fetchStub = stub(
       globalThis,
@@ -103,7 +119,9 @@ Deno.test({
       ((input: unknown) => {
         const url = String(input)
         if (url.endsWith('/.well-known/zanix/code-templates')) {
-          throw new Error('code-templates should never be fetched when templates succeeds')
+          throw new Error(
+            'code-templates should never be fetched when templates succeeds',
+          )
         }
         return Promise.resolve(
           new Response(
@@ -160,7 +178,10 @@ Deno.test({
     "syncTemplatesFromRegisteredService: 'templates' entries with no own hbs (derived, renders through parent) or active:false are excluded from the pull",
   fn: async () => {
     setServiceRegistry(
-      new ServiceRegistry([{ serviceId: 'billing', adminBaseUrl: 'http://billing.internal' }]),
+      new ServiceRegistry([{
+        serviceId: 'billing',
+        adminBaseUrl: 'http://billing.internal',
+      }]),
     )
     const fetchStub = stub(
       globalThis,
@@ -172,9 +193,21 @@ Deno.test({
               resourceType: 'templates',
               generatedAt: '',
               items: [
-                { channel: 'email', name: 'generic', hbs: '<p>hi</p>', hash: 'h1', active: true },
+                {
+                  channel: 'email',
+                  name: 'generic',
+                  hbs: '<p>hi</p>',
+                  hash: 'h1',
+                  active: true,
+                },
                 // Derived — no own hbs, renders through `parent`.
-                { channel: 'email', name: 'welcome', parent: 'generic', hash: 'h2', active: true },
+                {
+                  channel: 'email',
+                  name: 'welcome',
+                  parent: 'generic',
+                  hash: 'h2',
+                  active: true,
+                },
                 // Soft-deleted.
                 {
                   channel: 'email',
@@ -196,8 +229,72 @@ Deno.test({
       await syncTemplatesFromRegisteredService('billing', 'admin-1')
 
       assertEquals(syncCalls, [
-        [[{ channel: 'email', name: 'generic', hbs: '<p>hi</p>', hash: 'h1' }], 'admin-1'],
+        [
+          [{ channel: 'email', name: 'generic', hbs: '<p>hi</p>', hash: 'h1' }],
+          'admin-1',
+        ],
       ])
+    } finally {
+      fetchStub.restore()
+      providersStub.restore()
+    }
+  },
+})
+
+Deno.test({
+  name:
+    "syncTemplatesFromRegisteredService: 'templates' succeeding with zero usable entries is respected as-is — never falls back to code-templates",
+  fn: async () => {
+    // A `200` with nothing usable (empty, or only content-less derived stubs) is deliberately
+    // NOT treated as a reason to try `'code-templates'` too — it's indistinguishable, from here,
+    // from a target that genuinely has zero active templates by its own choice (deleted them,
+    // never populated them, doesn't want the central defaults imposed on it). Falling back in that
+    // case would silently resurrect code content the target doesn't want synced. (It can also
+    // happen transiently right after a Mode A/B target boots, before its own lazy
+    // `LocalTemplateBackend` sync has run — that's an accepted, narrow race, not a reason to guess.)
+    setServiceRegistry(
+      new ServiceRegistry([{
+        serviceId: 'billing',
+        adminBaseUrl: 'http://billing.internal',
+      }]),
+    )
+    const fetchStub = stub(
+      globalThis,
+      'fetch',
+      ((input: unknown) => {
+        const url = String(input)
+        if (url.endsWith('/.well-known/zanix/code-templates')) {
+          throw new Error(
+            'code-templates should never be fetched when templates succeeds',
+          )
+        }
+        // A derived-template stub with no own `hbs` — filtered out by `toSyncCodeTemplateEntries`,
+        // leaving zero usable entries despite the 200.
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              resourceType: 'templates',
+              generatedAt: '',
+              items: [{
+                channel: 'email',
+                name: 'welcome',
+                parent: 'generic',
+                active: true,
+              }],
+            }),
+            { status: 200, headers: { 'Content-Type': 'application/json' } },
+          ),
+        )
+      }) as never,
+    )
+    const syncCalls: unknown[] = []
+    const providersStub = stubSyncCodeTemplates(syncCalls)
+
+    try {
+      await syncTemplatesFromRegisteredService('billing', 'admin-1')
+
+      assertEquals(syncCalls, [[[], 'admin-1']])
+      assertEquals(fetchStub.calls.length, 1)
     } finally {
       fetchStub.restore()
       providersStub.restore()
@@ -210,7 +307,10 @@ Deno.test({
     "syncTemplatesFromRegisteredService: 'templates' 401/403 (unauthorized for that specific resource) also falls back to code-templates",
   fn: async () => {
     setServiceRegistry(
-      new ServiceRegistry([{ serviceId: 'billing', adminBaseUrl: 'http://billing.internal' }]),
+      new ServiceRegistry([{
+        serviceId: 'billing',
+        adminBaseUrl: 'http://billing.internal',
+      }]),
     )
     const fetchStub = stub(
       globalThis,
@@ -225,7 +325,12 @@ Deno.test({
             JSON.stringify({
               resourceType: 'code-templates',
               generatedAt: '',
-              items: [{ channel: 'sms', name: 'otp', hbs: 'code: {{code}}', hash: 'h9' }],
+              items: [{
+                channel: 'sms',
+                name: 'otp',
+                hbs: 'code: {{code}}',
+                hash: 'h9',
+              }],
             }),
             { status: 200, headers: { 'Content-Type': 'application/json' } },
           ),
@@ -238,7 +343,10 @@ Deno.test({
     try {
       await syncTemplatesFromRegisteredService('billing', 'admin-1')
       assertEquals(syncCalls, [
-        [[{ channel: 'sms', name: 'otp', hbs: 'code: {{code}}', hash: 'h9' }], 'admin-1'],
+        [
+          [{ channel: 'sms', name: 'otp', hbs: 'code: {{code}}', hash: 'h9' }],
+          'admin-1',
+        ],
       ])
     } finally {
       fetchStub.restore()
@@ -252,12 +360,18 @@ Deno.test({
     "syncTemplatesFromRegisteredService: a genuine failure on 'templates' (e.g. 500/network error) propagates — never silently falls back",
   fn: async () => {
     setServiceRegistry(
-      new ServiceRegistry([{ serviceId: 'billing', adminBaseUrl: 'http://billing.internal' }]),
+      new ServiceRegistry([{
+        serviceId: 'billing',
+        adminBaseUrl: 'http://billing.internal',
+      }]),
     )
     const fetchStub = stub(
       globalThis,
       'fetch',
-      (() => Promise.resolve(new Response('server exploded', { status: 500 }))) as never,
+      (() =>
+        Promise.resolve(
+          new Response('server exploded', { status: 500 }),
+        )) as never,
     )
     const providersStub = stubSyncCodeTemplates([])
 
@@ -279,7 +393,10 @@ Deno.test({
   name: 'setTemplatesDiscoveryClientFactory installs a custom factory used by the sync',
   fn: async () => {
     setServiceRegistry(
-      new ServiceRegistry([{ serviceId: 'billing', adminBaseUrl: 'http://billing.internal' }]),
+      new ServiceRegistry([{
+        serviceId: 'billing',
+        adminBaseUrl: 'http://billing.internal',
+      }]),
     )
 
     const customFactory: TemplatesDiscoveryClientFactory = (service) =>
@@ -300,7 +417,11 @@ Deno.test({
         // which resource ends up being used.
         return Promise.resolve(
           new Response(
-            JSON.stringify({ resourceType: 'templates', generatedAt: '', items: [] }),
+            JSON.stringify({
+              resourceType: 'templates',
+              generatedAt: '',
+              items: [],
+            }),
             { status: 200, headers: { 'Content-Type': 'application/json' } },
           ),
         ) as never
@@ -310,7 +431,10 @@ Deno.test({
 
     try {
       await syncTemplatesFromRegisteredService('billing', 'admin-1')
-      assertEquals(capturedHeaders?.['X-Znx-Authorization'], 'Bearer test-token')
+      assertEquals(
+        capturedHeaders?.['X-Znx-Authorization'],
+        'Bearer test-token',
+      )
     } finally {
       fetchStub.restore()
       providersStub.restore()
@@ -326,7 +450,10 @@ Deno.test({
     'setTemplatesDiscoveryClientFactory: an ASYNC factory (e.g. one that signs+exchanges a real credential) is awaited before use',
   fn: async () => {
     setServiceRegistry(
-      new ServiceRegistry([{ serviceId: 'billing', adminBaseUrl: 'http://billing.internal' }]),
+      new ServiceRegistry([{
+        serviceId: 'billing',
+        adminBaseUrl: 'http://billing.internal',
+      }]),
     )
 
     const asyncFactory: TemplatesDiscoveryClientFactory = async (service) => {
@@ -349,7 +476,11 @@ Deno.test({
         // which resource ends up being used.
         return Promise.resolve(
           new Response(
-            JSON.stringify({ resourceType: 'templates', generatedAt: '', items: [] }),
+            JSON.stringify({
+              resourceType: 'templates',
+              generatedAt: '',
+              items: [],
+            }),
             { status: 200, headers: { 'Content-Type': 'application/json' } },
           ),
         ) as never
@@ -359,7 +490,10 @@ Deno.test({
 
     try {
       await syncTemplatesFromRegisteredService('billing', 'admin-1')
-      assertEquals(capturedHeaders?.['X-Znx-Authorization'], 'Bearer async-token')
+      assertEquals(
+        capturedHeaders?.['X-Znx-Authorization'],
+        'Bearer async-token',
+      )
     } finally {
       fetchStub.restore()
       providersStub.restore()

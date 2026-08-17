@@ -22,12 +22,17 @@ Deno.test({
       rest: { onCreate: (id) => publicServers.push(id) },
     })
     assert(servers.length > 0, 'at least one server should have been started')
-    assert(publicServers.length > 0, 'a public REST server should have started for /triggers')
+    assert(
+      publicServers.length > 0,
+      'a public REST server should have started for /triggers',
+    )
 
     const info = webServerManager.info(publicServers[0] as never)
     assert(info.addr, 'the public server should be listening')
     // Default `globalPrefix` for a public REST server is `api`.
-    const res = await fetch(`http://${info.addr.hostname}:${info.addr.port}/api/triggers/list`)
+    const res = await fetch(
+      `http://${info.addr.hostname}:${info.addr.port}/api/triggers/list`,
+    )
     assertEquals(res.status, 401)
     await res.body?.cancel()
 

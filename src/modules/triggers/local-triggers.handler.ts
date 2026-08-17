@@ -24,7 +24,7 @@ const AUTH_TYPES = ADMIN_AUTH_TYPES
  * A factory rather than a plain always-decorated class — this package's own `defineAdminMetadata()`
  * calls this once at boot (in turn called by `@zanix/core`'s `start()`), wrapped in whichever
  * `defineApplication(...)` scope decides this route's Application (see `@zanix/server`'s
- * `docs/HANDLERS.md`'s "Applications" section) — by default `'admin'`, or `'main'` when
+ * `docs/APPLICATIONS.md`) — by default `'admin'`, or `'main'` when
  * `ADMIN_TRIGGERS_APPLICATION=main` overrides it. Deferring the decorator to an explicit call site
  * keeps registration intentional, the same reason every other controller in this package is a
  * factory rather than a plain class.
@@ -70,15 +70,22 @@ export function createTriggersAdminController(): new (
     @Put(':model', { Body: UpdateTriggerRTO, Params: TriggerModelParamsRTO })
     @AuthTokenValidation({ permissions: REQUIRED_ROLE, type: AUTH_TYPES })
     public update(
-      ctx: HandlerContext<{ body: UpdateTriggerRTO; params: TriggerModelParamsRTO }>,
+      ctx: HandlerContext<
+        { body: UpdateTriggerRTO; params: TriggerModelParamsRTO }
+      >,
     ) {
       const { active, triggers } = ctx.payload.body
-      return this.interactor.update(ctx.payload.params.model, { active, triggers })
+      return this.interactor.update(ctx.payload.params.model, {
+        active,
+        triggers,
+      })
     }
 
     @Delete(':model', { Params: TriggerModelParamsRTO })
     @AuthTokenValidation({ permissions: REQUIRED_ROLE, type: AUTH_TYPES })
-    public async remove(ctx: HandlerContext<{ params: TriggerModelParamsRTO }>) {
+    public async remove(
+      ctx: HandlerContext<{ params: TriggerModelParamsRTO }>,
+    ) {
       await this.interactor.remove(ctx.payload.params.model)
       return { deleted: ctx.payload.params.model }
     }

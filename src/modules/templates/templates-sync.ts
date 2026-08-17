@@ -84,10 +84,11 @@ export async function syncTemplatesFromRegisteredService(
   const service = getServiceRegistry().get(serviceId)
   const client = await getTemplatesDiscoveryClientFactory()(service)
   const entries = await pullTemplateEntries(client)
-  return ProgramModule.providers.get(TemplatesAdminRepository).syncCodeTemplates(
-    entries,
-    updatedBy as never,
-  )
+  return ProgramModule.providers.get(TemplatesAdminRepository)
+    .syncCodeTemplates(
+      entries,
+      updatedBy as never,
+    )
 }
 
 /**
@@ -101,12 +102,24 @@ export async function syncTemplatesFromRegisteredService(
  * indicates a genuine outage that would fail the fallback attempt too, so masking it here would
  * only hide a real problem, not route around one.
  *
+ * Deliberately does **not** treat a successful-but-empty `'templates'` response as a reason to try
+ * `'code-templates'` too, even though that can happen transiently (a Mode A/B target's own
+ * `LocalTemplateBackend` sync is lazy — only runs on that service's first `resolve()`/`preload()`
+ * call — so its collection can briefly be empty right after boot). An empty `200` is
+ * indistinguishable, from here, from a target that genuinely has zero active templates by its own
+ * choice (deleted them, never populated them, deliberately doesn't want the central defaults
+ * imposed on it); falling back in that case would silently resurrect code content the target
+ * doesn't want synced. `'templates'`, once it exists at all for a target, is always treated as the
+ * authoritative answer — empty included.
+ *
  * Deliberately does **not** inspect any `ZanixTemplateAttrs` field itself (which one carries
  * content, which means "skip me") — that's `@zanix/notifications`'s own contract, not something
  * this package should know or decide; {@link toSyncCodeTemplateEntries} (exported by the actual
  * data owner) does that translation, this function only picks which resource to ask for.
  */
-async function pullTemplateEntries(client: DiscoveryAdminClient): Promise<SyncCodeTemplateEntry[]> {
+async function pullTemplateEntries(
+  client: DiscoveryAdminClient,
+): Promise<SyncCodeTemplateEntry[]> {
   try {
     const entries = await client.snapshot<ZanixTemplateAttrs>('templates')
     return toSyncCodeTemplateEntries(entries)

@@ -36,6 +36,7 @@ export type { DiscoveryProvider } from '@zanix/server'
 
 export {
   ADMIN_APPLICATION,
+  ADMIN_HUB_APPLICATION,
   ADMIN_PROTOCOL_SUPPORTED_VERSIONS,
   ADMIN_PROTOCOL_VERSION,
   ADMIN_ROLE,
@@ -52,6 +53,26 @@ export {
  * per-controller composition behavior and the two `*_APPLICATION` env var overrides.
  */
 export { defineAdminMetadata } from 'modules/metadata.ts'
+/**
+ * Builds this package's own central aggregator/proxy Zanix App (`/triggers`, `/templates`) — what
+ * {@link ZanixAdminHub.start} activates internally; exported so a host that composes its own set of
+ * Zanix Apps via `Zanix.start({ apps: {...} })`/`activateApps` directly can install this one
+ * alongside its own, without going through {@link ZanixAdminHub} at all. See its own doc for the
+ * options it accepts and the `'service-registry'` resource it declares.
+ */
+export {
+  type AdminHubAppOptions,
+  type AdminStartApplication,
+  defineAdminHubApp,
+  getAdminHubSubApps,
+} from 'modules/admin-hub-app.ts'
+/**
+ * Builds this package's embedded, business-service-side admin Zanix App (`/admin/triggers`,
+ * `/admin/templates`, `/admin/service-token`) — what `@zanix/core`'s own `admin: true` option
+ * activates internally. Exported for the same direct-composition reason as
+ * {@link defineAdminHubApp}.
+ */
+export { defineLocalAdminApp, getLocalAdminSubApps } from 'modules/local-admin-app.ts'
 /**
  * The default guard (`ADMIN_ROLE`/`ADMIN_TEMPLATES_ROLE`) for any templates-shaped Discovery
  * surface — this package's own `/.well-known/zanix/templates` and `@zanix/core`'s
@@ -141,7 +162,7 @@ export { TriggersAdminClient } from 'modules/triggers/triggers.client.ts'
 export { TemplatesAdminClient } from 'modules/templates/templates.client.ts'
 /**
  * Thin HTTP client for a registered service's own `/.well-known/zanix/{resourceType}` Discovery
- * endpoint — see `@zanix/server`'s `docs/HANDLERS.md`'s "Discovery" section.
+ * endpoint — see `@zanix/server`'s `docs/APPLICATIONS.md`'s "Discovery" section.
  * `TriggersAggregator.list()`/`syncTemplatesFromRegisteredService` both use this internally;
  * exported for the same reuse reason as `TriggersAdminClient`/`TemplatesAdminClient`.
  */
@@ -222,12 +243,19 @@ export default class ZanixAdminHub {
   /**
    * Registers this package's routes/connectors and starts a REST server for them.
    *
+   * Also traps `SIGINT`/`SIGTERM` automatically (no opt-out) — either signal runs
+   * {@link ZanixAdminHub.stop} before exiting, same as `@zanix/core`'s own `Zanix.start()`.
+   *
    * @param options - Forwarded as-is to `@zanix/server`'s `bootstrapServers` (port, cors, gzip,
    * `onCreate`, etc.).
    * @returns The `ServerID`s of whatever servers were actually started.
    */
-  public static start = start
+  public static start: typeof start = start
 
-  /** Stops every server {@link ZanixAdminHub.start} started. */
-  public static stop = stop
+  /**
+   * Stops every server {@link ZanixAdminHub.start} started, then closes connector connections.
+   * Also called automatically on `SIGINT`/`SIGTERM` if {@link ZanixAdminHub.start} registered a
+   * handler for them.
+   */
+  public static stop: typeof stop = stop
 }

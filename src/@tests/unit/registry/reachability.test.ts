@@ -48,8 +48,10 @@ Deno.test('checkServiceRegistryReachability: classifies a 404 as misconfigured',
 })
 
 Deno.test('checkServiceRegistryReachability: a network error is unreachable', async () => {
-  globalThis.fetch =
-    (() => Promise.reject(new TypeError('network error'))) as unknown as typeof fetch
+  globalThis.fetch = (() =>
+    Promise.reject(
+      new TypeError('network error'),
+    )) as unknown as typeof fetch
 
   const registry = new ServiceRegistry([{
     serviceId: 'billing',

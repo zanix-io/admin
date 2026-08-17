@@ -70,7 +70,7 @@ const registeredAdminControllers: unknown[] = []
  * module namespace that already ran once.
  *
  * Each controller below registers itself inside its own `ProgramModule.defineApplication(name,
- * ...)` call (see `@zanix/server`'s `docs/HANDLERS.md`'s "Applications" section) — no outer, shared
+ * ...)` call (see `@zanix/server`'s `docs/APPLICATIONS.md`) — no outer, shared
  * wrap: every capability states its own Application explicitly, at its own registration site, rather
  * than inheriting one implicitly.
  *
@@ -79,17 +79,17 @@ const registeredAdminControllers: unknown[] = []
  *   default. Composed under {@link ADMIN_APPLICATION} by default; {@link ADMIN_TRIGGERS_APPLICATION_ENV}
  *   overrides which Application it's composed under instead (e.g. `'main'` moves it onto the
  *   default Application's own unanchored Runtime). A read-only `/.well-known/zanix/triggers`
- *   Discovery endpoint (see `@zanix/server`'s `docs/HANDLERS.md`'s "Discovery" section) is
+ *   Discovery endpoint (see `@zanix/server`'s `docs/APPLICATIONS.md`'s "Discovery" section) is
  *   registered alongside it, in the same Application scope, gated by the same {@link ADMIN_ROLE}/
  *   {@link ADMIN_TRIGGERS_ROLE} the CRUD controller itself requires — see `@zanix/datamaster`'s
  *   `createTriggersDiscoveryProvider`, which authors it (this package only composes it).
- * - The templates admin API (`/admin/templates`) is registered only once the caller has opted into
- *   DB-backed templates (`DATABASE_TEMPLATES=true` or `TEMPLATES_MODEL_NAME` set) — see
+ * - The templates admin API (`/admin/templates`) is registered only when `TEMPLATES_MODEL_NAME` is
+ *   set AND DB-backed templates weren't explicitly disabled (`DATABASE_TEMPLATES=false`) — see
  *   `@zanix/notifications`'s `docs/templates.md` for the per-service vs. shared storage decision
  *   this depends on. Composed under {@link ADMIN_APPLICATION} by default;
  *   {@link ADMIN_TEMPLATES_APPLICATION_ENV} overrides which Application it's composed under the
  *   same way. A read-only `/.well-known/zanix/templates` Discovery endpoint (see `@zanix/server`'s
- *   `docs/HANDLERS.md`'s "Discovery" section) is registered alongside it, in the same Application
+ *   `docs/APPLICATIONS.md`'s "Discovery" section) is registered alongside it, in the same Application
  *   scope, gated by the same {@link ADMIN_ROLE}/{@link ADMIN_TEMPLATES_ROLE} the CRUD controller
  *   itself requires — see `createTemplatesDiscoveryProvider`'s own doc.
  * - The service-credential exchange API (`/admin/service-token`) is always composed under
@@ -108,21 +108,26 @@ export const defineAdminMetadata = async (): Promise<void> => {
   })
 
   if (!isTriggersModelDisabled()) {
-    const triggersApplication = Deno.env.get(ADMIN_TRIGGERS_APPLICATION_ENV) || ADMIN_APPLICATION
+    const triggersApplication = Deno.env.get(ADMIN_TRIGGERS_APPLICATION_ENV) ||
+      ADMIN_APPLICATION
     let controller: unknown
     await ProgramModule.defineApplication(triggersApplication, () => {
       controller = createTriggersAdminController()
       // Same role gate as the CRUD endpoint above — see `createTriggersDiscoveryProvider`'s own
       // doc (in `@zanix/datamaster`, the actual owner of this data) for why the provider lives
       // there rather than in this package.
-      ProgramModule.defineDiscovery('triggers', createTriggersDiscoveryProvider(), {
-        guards: [
-          jwtValidationGuard({
-            permissions: [ADMIN_ROLE, ADMIN_TRIGGERS_ROLE],
-            type: DISCOVERY_AUTH_TYPES,
-          }),
-        ],
-      })
+      ProgramModule.defineDiscovery(
+        'triggers',
+        createTriggersDiscoveryProvider(),
+        {
+          guards: [
+            jwtValidationGuard({
+              permissions: [ADMIN_ROLE, ADMIN_TRIGGERS_ROLE],
+              type: DISCOVERY_AUTH_TYPES,
+            }),
+          ],
+        },
+      )
     })
     controllers.push(controller)
   }
@@ -134,9 +139,13 @@ export const defineAdminMetadata = async (): Promise<void> => {
       controller = createTemplatesController({ prefix: 'admin/templates' })
       // Same role gate as the CRUD endpoint above — see `createTemplatesDiscoveryProvider`'s own
       // doc for why this reuses `TemplatesAdminRepository` rather than a second query path.
-      ProgramModule.defineDiscovery('templates', createTemplatesDiscoveryProvider(), {
-        guards: [createTemplatesDiscoveryGuard()],
-      })
+      ProgramModule.defineDiscovery(
+        'templates',
+        createTemplatesDiscoveryProvider(),
+        {
+          guards: [createTemplatesDiscoveryGuard()],
+        },
+      )
     })
     controllers.push(controller)
   }

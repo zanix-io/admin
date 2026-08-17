@@ -29,7 +29,9 @@ export type ReachabilityResult = {
  * same helper for the same reason, on the other side of the same exchange.
  */
 export function realHttpStatus(error: unknown): number | undefined {
-  if (!(error instanceof HttpError) || !(error.cause instanceof Error)) return undefined
+  if (!(error instanceof HttpError) || !(error.cause instanceof Error)) {
+    return undefined
+  }
   const match = error.cause.message.match(/^\[HTTP (\d+)\]/)
   return match ? Number(match[1]) : undefined
 }
@@ -46,8 +48,9 @@ export function realHttpStatus(error: unknown): number | undefined {
  * guaranteed a clean, typed 4xx, never a partial success or a mutation) — no new auth/guard concept
  * is introduced, and this never returns/infers a url/id the caller didn't already configure itself.
  *
- * Every per-entry failure is caught internally (`Promise.allSettled`) — this function itself can
- * never throw or hang its caller, and is safe to call fire-and-forget.
+ * Every per-entry failure is caught internally (a plain `Promise.all` is enough — see the
+ * implementation's own comment for why `allSettled` isn't needed) — this function itself can never
+ * throw or hang its caller, and is safe to call fire-and-forget.
  *
  * @param options.registry Defaults to the installed {@link getServiceRegistry} instance.
  * @param options.timeoutMs Per-entry probe timeout, in milliseconds. Defaults to `3000`.

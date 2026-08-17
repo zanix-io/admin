@@ -5,8 +5,10 @@ import ZanixAdminHub, { ServiceRegistry, setServiceRegistry } from '../../../mod
 stub(console, 'info')
 stub(console, 'warn')
 
-globalThis.fetch =
-  (() => Promise.reject(new TypeError('connection refused'))) as unknown as typeof fetch
+globalThis.fetch = (() =>
+  Promise.reject(
+    new TypeError('connection refused'),
+  )) as unknown as typeof fetch
 
 Deno.test({
   sanitizeOps: false,
@@ -23,7 +25,10 @@ Deno.test({
     )
 
     const servers = await ZanixAdminHub.start({ validateRegistry: true })
-    assert(servers.length > 0, 'the admin server should still have started normally')
+    assert(
+      servers.length > 0,
+      'the admin server should still have started normally',
+    )
 
     // Give the fire-and-forget probe a moment to run (and fail internally) before tearing down —
     // proves it doesn't hang or throw unhandled, not that we depend on its result.

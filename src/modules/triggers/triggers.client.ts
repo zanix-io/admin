@@ -33,12 +33,17 @@ import { ADMIN_PROTOCOL_VERSION } from 'utils/constants.ts'
  * ```
  */
 export class TriggersAdminClient extends RestClient {
+  /** Creates the client, stamping every request with {@link ADMIN_PROTOCOL_VERSION}. */
   constructor(
-    { headers, ...options }: NonNullable<ConstructorParameters<typeof RestClient>[0]> = {},
+    options: NonNullable<ConstructorParameters<typeof RestClient>[0]> = {},
   ) {
+    const { headers, ...opts } = typeof options === 'string' ? { contextId: options } : options
     super({
-      ...options,
-      headers: { [ADMIN_PROTOCOL_HEADER]: String(ADMIN_PROTOCOL_VERSION), ...headers },
+      ...opts,
+      headers: {
+        [ADMIN_PROTOCOL_HEADER]: String(ADMIN_PROTOCOL_VERSION),
+        ...headers,
+      },
     })
   }
 

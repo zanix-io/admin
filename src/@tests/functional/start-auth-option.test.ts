@@ -22,7 +22,10 @@ Deno.test({
 
     const { privateKey } = await generateRSAKeys()
     setServiceRegistry(
-      new ServiceRegistry([{ serviceId: 'billing', adminBaseUrl: 'http://billing.internal' }]),
+      new ServiceRegistry([{
+        serviceId: 'billing',
+        adminBaseUrl: 'http://billing.internal',
+      }]),
     )
 
     const exchangeCalls: string[] = []
@@ -30,7 +33,11 @@ Deno.test({
       exchangeCalls.push(url)
       return Promise.resolve(
         new Response(
-          JSON.stringify({ accessToken: 'billing-token', expiresIn: 1800, serviceId: 'billing' }),
+          JSON.stringify({
+            accessToken: 'billing-token',
+            expiresIn: 1800,
+            serviceId: 'billing',
+          }),
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         ),
       )

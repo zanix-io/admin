@@ -28,18 +28,28 @@ export interface TemplatesControllerOptions {
 
 /** The instance shape {@link createTemplatesController} builds — see its own docs. */
 export interface TemplatesControllerInstance extends ZanixController<TemplatesAdminService> {
+  /** `GET /` — lists every registered template. */
   list(): Promise<ZanixTemplateAttrs[]>
+  /** `GET /:channel/:name` — gets a single template by channel and name. */
   get(
     ctx: HandlerContext<{ params: TemplateParamsRTO }>,
   ): Promise<ZanixTemplateAttrs & Record<string, unknown>>
+  /** `POST /` — creates a new template entry. */
   create(
     ctx: HandlerContext<{ body: CreateTemplateRTO }>,
   ): Promise<ZanixTemplateAttrs & Record<string, unknown>>
+  /** `PUT /:channel/:name` — updates a template's `hbs`/`active`/other fields. */
   update(
     ctx: HandlerContext<{ body: UpdateTemplateRTO; params: TemplateParamsRTO }>,
   ): Promise<ZanixTemplateAttrs & Record<string, unknown>>
-  remove(ctx: HandlerContext<{ params: TemplateParamsRTO }>): Promise<{ deactivated: string }>
-  sync(ctx: HandlerContext<{ body: SyncTemplatesRTO }>): Promise<SyncCodeTemplatesResult>
+  /** `DELETE /:channel/:name` — deactivates a template entry (soft delete). */
+  remove(
+    ctx: HandlerContext<{ params: TemplateParamsRTO }>,
+  ): Promise<{ deactivated: string }>
+  /** `POST /sync` — pulls `serviceId`'s own code templates via its Discovery endpoint. */
+  sync(
+    ctx: HandlerContext<{ body: SyncTemplatesRTO }>,
+  ): Promise<SyncCodeTemplatesResult>
 }
 
 /**
@@ -58,7 +68,7 @@ export interface TemplatesControllerInstance extends ZanixController<TemplatesAd
  * config — called once at boot by either `ZanixAdminHub.start()` (with whatever `options.templates`
  * it was given) or this package's own `defineAdminMetadata()` (called in turn by `@zanix/core`'s
  * `start()`, fixed at `prefix: 'admin/templates'`); an app wiring this manually can call it directly
- * instead. Which Application (see `@zanix/server`'s `docs/HANDLERS.md`'s "Applications" section)
+ * instead. Which Application (see `@zanix/server`'s `docs/APPLICATIONS.md`)
  * this route belongs to is decided by whichever `defineApplication(...)` scope is active when this
  * call runs, not by an option here — see the caller's own docs (`ZanixAdminHub.start()`'s
  * `templates.application`, or this package's own `ADMIN_TEMPLATES_APPLICATION` env var) for how that's
@@ -104,13 +114,23 @@ export function createTemplatesController(
     public async create(
       ctx: HandlerContext<{ body: CreateTemplateRTO }>,
     ): Promise<ZanixTemplateAttrs & Record<string, unknown>> {
-      return { ...(await this.interactor.create(ctx.payload.body, ctx.session?.id ?? 'unknown')) }
+      return {
+        ...(await this.interactor.create(
+          ctx.payload.body,
+          ctx.session?.id ?? 'unknown',
+        )),
+      }
     }
 
-    @Put(':channel/:name', { Body: UpdateTemplateRTO, Params: TemplateParamsRTO })
+    @Put(':channel/:name', {
+      Body: UpdateTemplateRTO,
+      Params: TemplateParamsRTO,
+    })
     @AuthTokenValidation({ permissions: REQUIRED_ROLE, type: AUTH_TYPES })
     public async update(
-      ctx: HandlerContext<{ body: UpdateTemplateRTO; params: TemplateParamsRTO }>,
+      ctx: HandlerContext<
+        { body: UpdateTemplateRTO; params: TemplateParamsRTO }
+      >,
     ): Promise<ZanixTemplateAttrs & Record<string, unknown>> {
       const { channel, name } = ctx.payload.params
       return {

@@ -28,15 +28,24 @@ Deno.test({
   fn: async () => {
     const servers = await ZanixAdminHub.start()
 
-    // Only the admin Application server started — the "public" bootstrap never ran, since neither
-    // triggers nor templates was configured with `application: 'main'`.
-    assertEquals(servers.length, 1, 'only the admin server should have started')
+    // The admin Application server, plus one server per hub sub-app (`admin-hub-triggers`/
+    // `admin-hub-templates` — see `admin-hub-app.ts`'s own doc) started — the "public" bootstrap
+    // never ran, since neither triggers nor templates was configured with `application: 'main'`.
+    // `servers[0]` is still the real admin server (`start.ts`'s own return order puts
+    // `adminServers` before the sub-apps'), sharing one port with the other two.
+    assertEquals(
+      servers.length,
+      3,
+      'the admin server and its two sub-app servers should start',
+    )
 
     const info = webServerManager.info(servers[0])
     assert(info.addr, 'the admin server should be listening')
 
     // The foreign controller's own (public, default `api` prefix) route was never touched.
-    const res = await fetch(`http://${info.addr.hostname}:${info.addr.port}/api/foreign-only`)
+    const res = await fetch(
+      `http://${info.addr.hostname}:${info.addr.port}/api/foreign-only`,
+    )
     assertEquals(res.status, 404)
     await res.body?.cancel()
 

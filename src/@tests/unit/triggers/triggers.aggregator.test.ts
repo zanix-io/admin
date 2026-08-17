@@ -14,7 +14,9 @@ import {
 
 console.error = () => {}
 
-function fakeClient(overrides: Partial<Record<string, (...args: any[]) => any>> = {}): any {
+function fakeClient(
+  overrides: Partial<Record<string, (...args: any[]) => any>> = {},
+): any {
   return {
     list: overrides.list ?? (() => Promise.resolve([])),
     get: overrides.get ?? (() => Promise.resolve({} as never)),
@@ -49,7 +51,11 @@ Deno.test('TriggersAggregator.list fans out via Discovery, tagged by serviceId',
     })
   }
 
-  const aggregator = new TriggersAggregator(registry, undefined, discoveryClientFactory)
+  const aggregator = new TriggersAggregator(
+    registry,
+    undefined,
+    discoveryClientFactory,
+  )
   const result: AggregatedTrigger[] = await aggregator.list()
 
   assertEquals(calls, ['billing', 'inventory'])
@@ -69,7 +75,9 @@ Deno.test('TriggersAggregator.get proxies only to the resolved service', async (
   const calls: string[] = []
   const clientFactory: TriggersClientFactory = (service) => {
     return fakeClient({
-      get: (model: string) => (calls.push(`${service.serviceId}:${model}`),
+      get: (
+        model: string,
+      ) => (calls.push(`${service.serviceId}:${model}`),
         Promise.resolve({
           model,
           ...TRIGGER_DEFAULTS,
@@ -89,20 +97,33 @@ Deno.test({
     'TriggersAggregator: both factories may return a Promise (e.g. an async, credential-exchanging factory) — list()/get() await it before using the client',
   fn: async () => {
     // deno-lint-ignore require-await
-    const discoveryClientFactory: TriggersDiscoveryClientFactory = async (service) =>
-      fakeDiscoveryClient(() => Promise.resolve([{ model: `${service.serviceId}-model` }]))
+    const discoveryClientFactory: TriggersDiscoveryClientFactory = async (
+      service,
+    ) => fakeDiscoveryClient(() => Promise.resolve([{ model: `${service.serviceId}-model` }]))
     // deno-lint-ignore require-await
     const clientFactory: TriggersClientFactory = async (service) =>
-      fakeClient({ get: () => Promise.resolve({ model: `${service.serviceId}-model` }) })
+      fakeClient({
+        get: () => Promise.resolve({ model: `${service.serviceId}-model` }),
+      })
 
-    const aggregator = new TriggersAggregator(registry, clientFactory, discoveryClientFactory)
+    const aggregator = new TriggersAggregator(
+      registry,
+      clientFactory,
+      discoveryClientFactory,
+    )
 
     const listed = await aggregator.list()
-    assertEquals(listed.map((t) => t.serviceId).sort(), ['billing', 'inventory'])
-    assertEquals(listed.map((t) => (t as never as { model: string }).model).sort(), [
-      'billing-model',
-      'inventory-model',
+    assertEquals(listed.map((t) => t.serviceId).sort(), [
+      'billing',
+      'inventory',
     ])
+    assertEquals(
+      listed.map((t) => (t as never as { model: string }).model).sort(),
+      [
+        'billing-model',
+        'inventory-model',
+      ],
+    )
 
     const got = await aggregator.get('billing', 'Invoice')
     assertEquals(got, { model: 'billing-model' } as never)
@@ -113,7 +134,9 @@ Deno.test('TriggersAggregator.create forwards model/active/triggers', async () =
   const calls: unknown[] = []
   const clientFactory: TriggersClientFactory = () =>
     fakeClient({
-      create: (...args: unknown[]) => (calls.push(args), Promise.resolve({ ok: true } as never)),
+      create: (
+        ...args: unknown[]
+      ) => (calls.push(args), Promise.resolve({ ok: true } as never)),
     })
 
   const aggregator = new TriggersAggregator(registry, clientFactory)
@@ -124,14 +147,20 @@ Deno.test('TriggersAggregator.create forwards model/active/triggers', async () =
   })
 
   assertEquals(result, { ok: true } as never)
-  assertEquals(calls, [[{ model: 'Invoice', active: true, triggers: { pre: [] } }]])
+  assertEquals(calls, [[{
+    model: 'Invoice',
+    active: true,
+    triggers: { pre: [] },
+  }]])
 })
 
 Deno.test('TriggersAggregator.update forwards model/changes to the resolved service', async () => {
   const calls: unknown[] = []
   const clientFactory: TriggersClientFactory = () =>
     fakeClient({
-      update: (...args: unknown[]) => (calls.push(args), Promise.resolve({ ok: true })),
+      update: (
+        ...args: unknown[]
+      ) => (calls.push(args), Promise.resolve({ ok: true })),
     })
 
   const aggregator = new TriggersAggregator(registry, clientFactory)
@@ -167,7 +196,10 @@ Deno.test({
     // `get()` is `async` (its factory may need to `await` a real credential exchange), so a
     // synchronous failure like "unregistered service" now surfaces as a rejected Promise, not a
     // synchronous throw — `assertRejects`, not `assertThrows`.
-    await assertRejects(() => aggregator.get('unknown-service', 'Invoice'), InternalError)
+    await assertRejects(
+      () => aggregator.get('unknown-service', 'Invoice'),
+      InternalError,
+    )
     assertEquals(called, false)
   },
 })
@@ -181,10 +213,13 @@ Deno.test({
       'fetch',
       () =>
         Promise.resolve(
-          new Response(JSON.stringify({ model: 'Invoice', ...TRIGGER_DEFAULTS }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' },
-          }),
+          new Response(
+            JSON.stringify({ model: 'Invoice', ...TRIGGER_DEFAULTS }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            },
+          ),
         ) as never,
     )
 
@@ -194,7 +229,11 @@ Deno.test({
 
       assertEquals(result, { model: 'Invoice', ...TRIGGER_DEFAULTS })
       assertEquals(fetchStub.calls.length, 1)
-      assert(String(fetchStub.calls[0].args[0]).startsWith('http://billing.internal'))
+      assert(
+        String(fetchStub.calls[0].args[0]).startsWith(
+          'http://billing.internal',
+        ),
+      )
     } finally {
       fetchStub.restore()
     }
@@ -228,7 +267,11 @@ Deno.test({
       )
       const result = await aggregator.list()
 
-      assertEquals(result, [{ model: 'Invoice', ...TRIGGER_DEFAULTS, serviceId: 'billing' }])
+      assertEquals(result, [{
+        model: 'Invoice',
+        ...TRIGGER_DEFAULTS,
+        serviceId: 'billing',
+      }])
       assertEquals(fetchStub.calls.length, 1)
       assert(
         String(fetchStub.calls[0].args[0]).startsWith(

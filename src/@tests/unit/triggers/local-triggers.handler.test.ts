@@ -16,7 +16,9 @@ const handler = TriggersAdminController.prototype
 Deno.test('TriggersAdminController.list forwards to interactor.list()', () => {
   const calls: unknown[][] = []
   const result: unknown = handler.list.call(
-    fakeThis({ list: (...args: unknown[]) => (calls.push(args), 'list-result') }),
+    fakeThis({
+      list: (...args: unknown[]) => (calls.push(args), 'list-result'),
+    }),
   )
   assertEquals(result, 'list-result')
   assertEquals(calls, [[]])
@@ -24,7 +26,9 @@ Deno.test('TriggersAdminController.list forwards to interactor.list()', () => {
 
 Deno.test('TriggersAdminController.get forwards params.model to interactor.get()', () => {
   const calls: unknown[][] = []
-  const ctx = { payload: { params: { model: 'zanix-triggers' } } } as HandlerContext<never>
+  const ctx = {
+    payload: { params: { model: 'zanix-triggers' } },
+  } as HandlerContext<never>
   const result: unknown = handler.get.call(
     fakeThis({ get: (...args: unknown[]) => (calls.push(args), 'get-result') }),
     ctx,
@@ -39,7 +43,9 @@ Deno.test('TriggersAdminController.create forwards model/active/triggers to crea
     payload: { body: { model: 'm', active: true, triggers: { pre: {} } } },
   } as HandlerContext<never>
   const result: unknown = handler.create.call(
-    fakeThis({ create: (...args: unknown[]) => (calls.push(args), 'create-result') }),
+    fakeThis({
+      create: (...args: unknown[]) => (calls.push(args), 'create-result'),
+    }),
     ctx,
   )
   assertEquals(result, 'create-result')
@@ -49,10 +55,15 @@ Deno.test('TriggersAdminController.create forwards model/active/triggers to crea
 Deno.test('TriggersAdminController.update forwards model + {active, triggers} to update()', () => {
   const calls: unknown[][] = []
   const ctx = {
-    payload: { body: { active: false, triggers: { post: {} } }, params: { model: 'm' } },
+    payload: {
+      body: { active: false, triggers: { post: {} } },
+      params: { model: 'm' },
+    },
   } as HandlerContext<never>
   const result: unknown = handler.update.call(
-    fakeThis({ update: (...args: unknown[]) => (calls.push(args), 'update-result') }),
+    fakeThis({
+      update: (...args: unknown[]) => (calls.push(args), 'update-result'),
+    }),
     ctx,
   )
   assertEquals(result, 'update-result')
@@ -63,7 +74,9 @@ Deno.test('TriggersAdminController.remove forwards model, reports deleted', asyn
   const calls: unknown[][] = []
   const ctx = { payload: { params: { model: 'm' } } } as HandlerContext<never>
   const result = await handler.remove.call(
-    fakeThis({ remove: (...args: unknown[]) => (calls.push(args), Promise.resolve()) }),
+    fakeThis({
+      remove: (...args: unknown[]) => (calls.push(args), Promise.resolve()),
+    }),
     ctx,
   )
   assertEquals(result, { deleted: 'm' })

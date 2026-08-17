@@ -45,7 +45,9 @@ Deno.test({
     const accessToken = await createAppToken({
       type: 'api',
       subject: 'test-service',
-      payload: { permissions: [ADMIN_ROLE, ADMIN_TRIGGERS_ROLE, ADMIN_TEMPLATES_ROLE] },
+      payload: {
+        permissions: [ADMIN_ROLE, ADMIN_TRIGGERS_ROLE, ADMIN_TEMPLATES_ROLE],
+      },
     })
 
     await ProgramModule.defineApplication('admin-auth-type-api-check', () => {
@@ -72,7 +74,9 @@ Deno.test({
       }
 
       // Mirrors `metadata.ts`'s own two Discovery guards exactly.
-      ProgramModule.defineDiscovery('check-triggers', { snapshot: () => Promise.resolve([]) }, {
+      ProgramModule.defineDiscovery('check-triggers', {
+        snapshot: () => Promise.resolve([]),
+      }, {
         guards: [
           jwtValidationGuard({
             permissions: [ADMIN_ROLE, ADMIN_TRIGGERS_ROLE],
@@ -80,7 +84,9 @@ Deno.test({
           }),
         ],
       })
-      ProgramModule.defineDiscovery('check-templates', { snapshot: () => Promise.resolve([]) }, {
+      ProgramModule.defineDiscovery('check-templates', {
+        snapshot: () => Promise.resolve([]),
+      }, {
         guards: [
           jwtValidationGuard({
             permissions: [ADMIN_ROLE, ADMIN_TEMPLATES_ROLE],

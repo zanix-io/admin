@@ -31,11 +31,14 @@ import { createServiceAssertion } from 'jsr:@zanix/auth@[version]'
 const assertion = await createServiceAssertion({ serviceId: 'billing' })
 
 // Step 2 — exchange it against the target service's own admin server.
-const response = await fetch('http://target.internal:8000/admin/service-token', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ assertion }),
-})
+const response = await fetch(
+  'http://target.internal:8000/admin/service-token',
+  {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ assertion }),
+  },
+)
 const { accessToken } = await response.json()
 
 // Step 3 — call the real endpoint, authenticated.
@@ -81,7 +84,7 @@ reach another service's own `/admin/triggers`/`/admin/templates` (the embedded a
 
 **If you're calling this from `ZanixAdminHub.start()` itself**, don't hand-roll any of the below —
 pass `auth: { serviceId }` to `start()` instead (see
-[`ZanixAdminHub.start({ auth })`](#zanixadminhubstart-auth)), and it wires an authenticated
+[`ZanixAdminHub.start({ auth })`](#zanixadminhubstart-auth-)), and it wires an authenticated
 `TriggersAggregator`/`TemplatesDiscoveryClientFactory` for you automatically. The manual pattern
 below is for building your own client factory outside of `start()` — e.g. a custom `RestClient`
 subclass, or different credentials for CRUD vs. Discovery reads. Use
@@ -131,7 +134,10 @@ import ZanixAdminHub, { ServiceRegistry, setServiceRegistry } from 'jsr:@zanix/a
 
 setServiceRegistry(
   new ServiceRegistry([
-    { serviceId: 'billing', adminBaseUrl: 'http://billing.internal:8000/billing-rest' },
+    {
+      serviceId: 'billing',
+      adminBaseUrl: 'http://billing.internal:8000/billing-rest',
+    },
   ]),
 )
 
@@ -193,9 +199,10 @@ The hub's own process needs `JWK_PUB_ops-tool` and `SERVICE_PERMISSIONS_ops-tool
 `zanix:admin`/`zanix:admin:triggers`/`zanix:admin:templates` as appropriate) set — the exact same
 mechanism as any other target, just configured on `ZanixAdminHub`'s own deployment instead of a
 business service's. This is the opposite direction from
-[`ZanixAdminHub.start({ auth })`](#zanixadminhubstart-auth): that option only configures how the hub
-authenticates **outbound** to each registered service — it has no effect on how an external caller
-like `ops-tool` authenticates **inbound** to the hub, which always works this same way regardless.
+[`ZanixAdminHub.start({ auth })`](#zanixadminhubstart-auth-): that option only configures how the
+hub authenticates **outbound** to each registered service — it has no effect on how an external
+caller like `ops-tool` authenticates **inbound** to the hub, which always works this same way
+regardless.
 
 ---
 

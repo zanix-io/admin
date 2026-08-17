@@ -19,7 +19,9 @@ const handler = TemplatesController.prototype
 Deno.test('TemplatesController.list forwards to interactor.list()', () => {
   const calls: unknown[][] = []
   const result: unknown = handler.list.call(
-    fakeThis({ list: (...args: unknown[]) => (calls.push(args), 'list-result') }),
+    fakeThis({
+      list: (...args: unknown[]) => (calls.push(args), 'list-result'),
+    }),
   )
   assertEquals(result, 'list-result')
   assertEquals(calls, [[]])
@@ -27,12 +29,16 @@ Deno.test('TemplatesController.list forwards to interactor.list()', () => {
 
 Deno.test('TemplatesController.get forwards channel/name, spreads the result', async () => {
   const calls: unknown[][] = []
-  const ctx = { payload: { params: { channel: 'email', name: 'welcome' } } } as HandlerContext<
+  const ctx = {
+    payload: { params: { channel: 'email', name: 'welcome' } },
+  } as HandlerContext<
     never
   >
   const result: unknown = await handler.get.call(
     fakeThis({
-      get: (...args: unknown[]) => (calls.push(args), Promise.resolve({ name: 'welcome' })),
+      get: (
+        ...args: unknown[]
+      ) => (calls.push(args), Promise.resolve({ name: 'welcome' })),
     }),
     ctx,
   )
@@ -48,12 +54,17 @@ Deno.test('TemplatesController.create forwards body + session id to create()', a
   } as HandlerContext<never>
   const result: unknown = await handler.create.call(
     fakeThis({
-      create: (...args: unknown[]) => (calls.push(args), Promise.resolve({ name: 'invoice' })),
+      create: (
+        ...args: unknown[]
+      ) => (calls.push(args), Promise.resolve({ name: 'invoice' })),
     }),
     ctx,
   )
   assertEquals(result, { name: 'invoice' })
-  assertEquals(calls, [[{ channel: 'email', name: 'invoice', hbs: '<p>hi</p>' }, 'admin-1']])
+  assertEquals(calls, [[
+    { channel: 'email', name: 'invoice', hbs: '<p>hi</p>' },
+    'admin-1',
+  ]])
 })
 
 Deno.test("TemplatesController.create falls back to 'unknown' with no session", async () => {
@@ -62,7 +73,9 @@ Deno.test("TemplatesController.create falls back to 'unknown' with no session", 
     payload: { body: { channel: 'email', name: 'invoice', hbs: '<p>hi</p>' } },
   } as HandlerContext<never>
   await handler.create.call(
-    fakeThis({ create: (...args: unknown[]) => (calls.push(args), Promise.resolve({})) }),
+    fakeThis({
+      create: (...args: unknown[]) => (calls.push(args), Promise.resolve({})),
+    }),
     ctx,
   )
   assertEquals(calls[0][1], 'unknown')
@@ -71,12 +84,17 @@ Deno.test("TemplatesController.create falls back to 'unknown' with no session", 
 Deno.test('TemplatesController.update forwards fields to update()', async () => {
   const calls: unknown[][] = []
   const ctx = {
-    payload: { params: { channel: 'email', name: 'welcome' }, body: { hbs: '<p>new</p>' } },
+    payload: {
+      params: { channel: 'email', name: 'welcome' },
+      body: { hbs: '<p>new</p>' },
+    },
     session: { id: 'admin-2' },
   } as HandlerContext<never>
   const result: unknown = await handler.update.call(
     fakeThis({
-      update: (...args: unknown[]) => (calls.push(args), Promise.resolve({ version: 2 })),
+      update: (
+        ...args: unknown[]
+      ) => (calls.push(args), Promise.resolve({ version: 2 })),
     }),
     ctx,
   )
@@ -87,10 +105,15 @@ Deno.test('TemplatesController.update forwards fields to update()', async () => 
 Deno.test("TemplatesController.update falls back to 'unknown' with no session", async () => {
   const calls: unknown[][] = []
   const ctx = {
-    payload: { params: { channel: 'email', name: 'welcome' }, body: { hbs: '<p>new</p>' } },
+    payload: {
+      params: { channel: 'email', name: 'welcome' },
+      body: { hbs: '<p>new</p>' },
+    },
   } as HandlerContext<never>
   await handler.update.call(
-    fakeThis({ update: (...args: unknown[]) => (calls.push(args), Promise.resolve({})) }),
+    fakeThis({
+      update: (...args: unknown[]) => (calls.push(args), Promise.resolve({})),
+    }),
     ctx,
   )
   assertEquals(calls[0][3], 'unknown')
@@ -103,7 +126,9 @@ Deno.test('TemplatesController.remove forwards fields, reports deactivated', asy
     session: { id: 'admin-3' },
   } as HandlerContext<never>
   const result = await handler.remove.call(
-    fakeThis({ remove: (...args: unknown[]) => (calls.push(args), Promise.resolve()) }),
+    fakeThis({
+      remove: (...args: unknown[]) => (calls.push(args), Promise.resolve()),
+    }),
     ctx,
   )
   assertEquals(result, { deactivated: 'welcome' })
@@ -112,11 +137,15 @@ Deno.test('TemplatesController.remove forwards fields, reports deactivated', asy
 
 Deno.test("TemplatesController.remove falls back to 'unknown' with no session", async () => {
   const calls: unknown[][] = []
-  const ctx = { payload: { params: { channel: 'email', name: 'welcome' } } } as HandlerContext<
+  const ctx = {
+    payload: { params: { channel: 'email', name: 'welcome' } },
+  } as HandlerContext<
     never
   >
   await handler.remove.call(
-    fakeThis({ remove: (...args: unknown[]) => (calls.push(args), Promise.resolve()) }),
+    fakeThis({
+      remove: (...args: unknown[]) => (calls.push(args), Promise.resolve()),
+    }),
     ctx,
   )
   assertEquals(calls[0][2], 'unknown')
@@ -124,11 +153,14 @@ Deno.test("TemplatesController.remove falls back to 'unknown' with no session", 
 
 // `sync()` no longer delegates to `this.interactor` (see `syncTemplatesFromRegisteredService`'s
 // own tests, `templates-sync.test.ts`) — these two just confirm the route forwards
-// `body.service_id`/`session.id` into that standalone function correctly, using the same
+// `body.serviceId`/`session.id` into that standalone function correctly, using the same
 // registry/fetch/providers stubbing seam its own dedicated test suite already exercises fully.
 function withSyncEnv(updatedByCalls: unknown[][], fn: () => Promise<unknown>) {
   setServiceRegistry(
-    new ServiceRegistry([{ serviceId: 'billing', adminBaseUrl: 'http://billing.internal' }]),
+    new ServiceRegistry([{
+      serviceId: 'billing',
+      adminBaseUrl: 'http://billing.internal',
+    }]),
   )
   const fetchStub = stub(
     globalThis,
@@ -136,7 +168,11 @@ function withSyncEnv(updatedByCalls: unknown[][], fn: () => Promise<unknown>) {
     () =>
       Promise.resolve(
         new Response(
-          JSON.stringify({ resourceType: 'code-templates', generatedAt: '', items: [] }),
+          JSON.stringify({
+            resourceType: 'code-templates',
+            generatedAt: '',
+            items: [],
+          }),
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         ),
       ) as never,
@@ -160,7 +196,7 @@ function withSyncEnv(updatedByCalls: unknown[][], fn: () => Promise<unknown>) {
 }
 
 Deno.test({
-  name: 'TemplatesController.sync forwards service_id + session id, returns summary',
+  name: 'TemplatesController.sync forwards serviceId + session id, returns summary',
   fn: async () => {
     const calls: unknown[][] = []
     const ctx = {
@@ -168,7 +204,10 @@ Deno.test({
       session: { id: 'service-account-1' },
     } as HandlerContext<never>
 
-    const result = await withSyncEnv(calls, () => handler.sync.call(fakeThis({}), ctx))
+    const result = await withSyncEnv(
+      calls,
+      () => handler.sync.call(fakeThis({}), ctx),
+    )
 
     assertEquals(result, { seeded: 1, resynced: 0 })
     assertEquals(calls[0][1], 'service-account-1')
@@ -177,7 +216,9 @@ Deno.test({
 
 Deno.test("TemplatesController.sync falls back to 'unknown' with no session", async () => {
   const calls: unknown[][] = []
-  const ctx = { payload: { body: { serviceId: 'billing' } } } as HandlerContext<never>
+  const ctx = { payload: { body: { serviceId: 'billing' } } } as HandlerContext<
+    never
+  >
 
   await withSyncEnv(calls, () => handler.sync.call(fakeThis({}), ctx))
 

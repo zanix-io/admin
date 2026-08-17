@@ -19,7 +19,10 @@ Deno.test({
     Deno.env.delete('TRIGGERS_MODEL_NAME')
 
     const [serverId] = await bootstrapServers({
-      rest: { application: ADMIN_APPLICATION, id: 'metadata-triggers-disabled-test' },
+      rest: {
+        application: ADMIN_APPLICATION,
+        id: 'metadata-triggers-disabled-test',
+      },
     })
     assert(serverId, 'the admin REST server should have been started')
 
@@ -31,7 +34,9 @@ Deno.test({
     assertEquals(triggers.status, 404)
     await triggers.body?.cancel()
 
-    const triggersDiscovery = await fetch(`${baseUrl}/.well-known/zanix/triggers`)
+    const triggersDiscovery = await fetch(
+      `${baseUrl}/.well-known/zanix/triggers`,
+    )
     assertEquals(triggersDiscovery.status, 404)
     await triggersDiscovery.body?.cancel()
 

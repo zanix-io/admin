@@ -1,8 +1,10 @@
 import type { BootstrapServerOptions, ServerID } from '@zanix/server'
 import type { ServiceAuthClientOptions } from '@zanix/auth'
+import type { ActivatedApps } from '@zanix/app/runtime'
 
 import {
   bootstrapServers,
+  closeAllConnections,
   createStartLifecycleGuard,
   DEFAULT_APPLICATION,
   ProgramModule,
@@ -10,20 +12,37 @@ import {
   resolvePreviousApplicationServerId,
   webServerManager,
 } from '@zanix/server'
+import { activateApps, bootstrapAppServer, deactivateApps } from '@zanix/app/runtime'
 
 import logger from '@zanix/logger'
 import { ADMIN_HUB_APPLICATION } from '../utils/constants.ts'
 import type { TemplatesControllerOptions } from './templates/templates.handler.ts'
 import type { TriggersControllerOptions } from './triggers/triggers.handler.ts'
 import { checkServiceRegistryReachability } from './registry/reachability.ts'
-import { getServiceRegistry } from './registry/registry.ts'
-import { createServiceRegistryAuthHeaders } from './registry/auth.ts'
-import { setTriggersAggregator, TriggersAggregator } from './triggers/triggers.aggregator.ts'
-import { TriggersAdminClient } from './triggers/triggers.client.ts'
-import { DiscoveryAdminClient } from './discovery/discovery.client.ts'
-import { setTemplatesDiscoveryClientFactory } from './templates/templates-sync.ts'
+import { defineAdminHubApp, getAdminHubSubApps } from './admin-hub-app.ts'
+import type { AdminStartApplication } from './admin-hub-app.ts'
+
+export type { AdminStartApplication } from './admin-hub-app.ts'
 
 let servers: ServerID[] = []
+let activated: ActivatedApps | undefined
+
+/**
+ * The signal-triggered shutdown wrapper registered by the most recently successful `start()` call —
+ * same pattern `@zanix/core`'s own `start.ts` established (a fresh closure per call, `stop()` itself
+ * removes the listeners rather than the wrapper removing itself, since `stop()` is also called
+ * directly by app code/tests, not just from here). This package's own reason for needing it
+ * independently of `@zanix/core`: {@link start} is a real, standalone deployable entrypoint in its
+ * own right (see its own doc's "Reference deployable entrypoint" — a team can run `ZanixAdminHub` as
+ * its own process, never going through `Zanix.start()` at all), so it must trap `SIGINT`/`SIGTERM`
+ * on its own rather than relying on a caller that may not exist. `undefined` once removed (or before
+ * the first successful `start()`) — `stop()` only calls `Deno.removeSignalListener` when this is
+ * set, so calling `stop()` twice in a row is a safe no-op on this front, matching `markStopped()`'s
+ * own idempotency. `createStartLifecycleGuard`'s own reentry guarantee (at most one `start()`
+ * "running" per process without an intervening `stop()`) is what keeps registering/removing this
+ * safe to repeat across many start/stop cycles in the same process without ever leaking a listener.
+ */
+let signalShutdown: (() => Promise<void>) | undefined
 
 /**
  * Guards against overlapping/repeated `start()` calls — see `@zanix/server`'s
@@ -37,79 +56,6 @@ const lifecycleGuard = createStartLifecycleGuard({
   source: 'zanix-admin',
 })
 
-// Kept alive deliberately: a class produced by a factory and only ever referenced by a `Promise`'s
-// resolved value has no other strong reference once that `Promise` is discarded —
-// `@zanix/server`'s target registry resolves instances via a `WeakMap` keyed by class reference, so
-// a garbage-collected class can silently stop dispatching. Costs nothing to just hold onto them.
-const registeredControllers: unknown[] = []
-
-/**
- * Registers `zanix-admin`'s own building blocks — side-effect imports/factory calls only, run once
- * per process, inside {@link start} rather than at this module's top level, so merely importing
- * `@zanix/admin` (e.g. for its types) never triggers connector registration or env var reads on its
- * own:
- *
- * - `@zanix/datamaster/core` / `@zanix/auth/core` / `@zanix/notifications/core` — the same
- *   zero-config connector/provider wiring any `@zanix/core`-based service gets from
- *   `Zanix.bootstrap()`: the Mongo connector the templates controller needs (via
- *   `TemplatesAdminRepository`), the session/auth infra `AuthTokenValidation`/`rateLimitGuard`
- *   need, and the `TemplateProvider` + templates model `TemplatesAdminService` reads through.
- * - `createTriggersController(triggers)` / `createTemplatesController(templates)` — building (and
- *   thereby registering, via their `@Controller` decorator) each route, wrapped in
- *   `ProgramModule.defineApplication(...)` so it's attributed to {@link ADMIN_HUB_APPLICATION} by
- *   default, or {@link DEFAULT_APPLICATION} (see `docs/HANDLERS.md`'s "Applications" section) when
- *   its own `application` option says so; `false` skips that controller entirely.
- *   `bootstrapServers` below only ever serves what's registered here.
- */
-async function defineAdminMetadata(
-  triggers: false | (TriggersControllerOptions & { application?: AdminStartApplication }),
-  templates: false | (TemplatesControllerOptions & { application?: AdminStartApplication }),
-): Promise<void> {
-  const imports: Promise<unknown>[] = [
-    import('@zanix/datamaster/core'),
-    import('@zanix/auth/core'),
-    import('@zanix/notifications/core'),
-  ]
-
-  if (triggers !== false) {
-    const { application = ADMIN_HUB_APPLICATION, ...options } = triggers
-    imports.push(
-      import('./triggers/triggers.handler.ts').then(async ({ createTriggersController }) => {
-        let controller: unknown
-        await ProgramModule.defineApplication(application, () => {
-          controller = createTriggersController(options)
-        })
-        return controller
-      }),
-    )
-  }
-  if (templates !== false) {
-    const { application = ADMIN_HUB_APPLICATION, ...options } = templates
-    imports.push(
-      import('./templates/templates.handler.ts').then(async ({ createTemplatesController }) => {
-        let controller: unknown
-        await ProgramModule.defineApplication(application, () => {
-          controller = createTemplatesController(options)
-        })
-        return controller
-      }),
-    )
-  }
-
-  registeredControllers.push(...(await Promise.all(imports)))
-}
-
-/**
- * The only two Applications {@link start} itself can ever actually serve — it bootstraps exactly
- * two servers, one per Application (see its own doc), never an arbitrary third one. Unlike
- * `BootstrapServerOptions[type].application` (any Application name, since that's forwarded as-is
- * to `bootstrapServers`), `triggers`/`templates`'s own `application` is restricted to this literal
- * union on purpose — accepting any string here would silently register a capability under an
- * Application {@link start} never activates a Runtime for, since it only ever calls
- * `bootstrapServers` for these two.
- */
-export type AdminStartApplication = typeof DEFAULT_APPLICATION | typeof ADMIN_HUB_APPLICATION
-
 /** Options accepted by {@link start}, alongside whatever `@zanix/server`'s `bootstrapServers` takes. */
 export type StartOptions = BootstrapServerOptions & {
   /**
@@ -118,14 +64,18 @@ export type StartOptions = BootstrapServerOptions & {
    * {@link ADMIN_HUB_APPLICATION}'s own server (the default choice — anchored, id-prefixed, whenever
    * `ADMIN_HUB_SERVER_ID` is set) — see {@link start}'s own doc.
    */
-  triggers?: false | (TriggersControllerOptions & { application?: AdminStartApplication })
+  triggers?:
+    | false
+    | (TriggersControllerOptions & { application?: AdminStartApplication })
   /**
    * Options for the templates route, or `false` to skip registering it entirely. `application:
    * 'main'` mounts it on the default Application's own public, unprefixed server instead of
    * {@link ADMIN_HUB_APPLICATION}'s own server (the default choice — anchored, id-prefixed, whenever
    * `ADMIN_HUB_SERVER_ID` is set) — see {@link start}'s own doc.
    */
-  templates?: false | (TemplatesControllerOptions & { application?: AdminStartApplication })
+  templates?:
+    | false
+    | (TemplatesControllerOptions & { application?: AdminStartApplication })
   /**
    * Opt-in, fire-and-forget reachability check against every entry in the installed
    * `ServiceRegistry` (see {@link checkServiceRegistryReachability}) — catches a stale/typo'd
@@ -172,8 +122,8 @@ export type StartOptions = BootstrapServerOptions & {
  * If both are anchored (`ADMIN_SERVER_ID` and `ADMIN_HUB_SERVER_ID` both set), each gets its own
  * stable prefix, so they can even share one port.
  *
- * Both controllers default to {@link ADMIN_HUB_APPLICATION} (see `docs/HANDLERS.md`'s "Applications"
- * section), so by default only that one server starts — anchored (id-prefixed) whenever
+ * Both controllers default to {@link ADMIN_HUB_APPLICATION} (see `docs/APPLICATIONS.md`), so by
+ * default only that one server starts — anchored (id-prefixed) whenever
  * `ADMIN_HUB_SERVER_ID` is set, a plain unprefixed server otherwise (there is no auto-generated
  * anchored id). A "public" REST server (the default Application, always unprefixed) only gets
  * bootstrapped when `triggers`/`templates` is explicitly configured with `application: 'main'` —
@@ -183,6 +133,18 @@ export type StartOptions = BootstrapServerOptions & {
  * Only ever starts REST servers (the triggers/templates routes are REST-only) — a `graphql`/
  * `socket` entry in `options` is accepted (forwarded as-is to `bootstrapServers`) but has nothing
  * of this package's own to serve.
+ *
+ * A successful `start()` also traps `SIGINT`/`SIGTERM` automatically (no opt-out) — either signal
+ * runs {@link stop} (draining HTTP requests via `Deno.serve()`'s own `.shutdown()`, then closing
+ * connector connections), then exits cleanly. **Deliberately does NOT force the process down if
+ * {@link stop} itself fails** — unlike `@zanix/core`'s own `Zanix.start()`, which owns the whole
+ * process it runs in, this package is frequently just one participant sharing a process with an
+ * unrelated, genuinely independent entrypoint (e.g. a business service's own `Zanix.start()` — see
+ * `signalShutdown`'s own doc for why the two share no state). A `stop()` failure here logs the error
+ * and leaves the process running rather than calling `Deno.exit()`, so this package's own cleanup
+ * trouble can never take an otherwise-healthy co-located service down with it — an orchestrator's own
+ * SIGKILL-after-grace-period is the correct backstop for a shutdown that didn't complete cleanly, not
+ * this handler forcing it.
  *
  * @param options - `triggers`/`templates` configure (or, as `false`, skip) each built-in
  * controller; everything else is forwarded as-is to `@zanix/server`'s `bootstrapServers` (port,
@@ -211,6 +173,36 @@ export const start = async (
     }
 
     lifecycleGuard.markRunning()
+
+    // See `signalShutdown`'s own doc for why this package traps its own signals rather than relying
+    // on a caller (e.g. `@zanix/core`'s `Zanix.start()`) that may not be present at all.
+    signalShutdown = async () => {
+      logger.info(
+        'Shutdown signal received, stopping ZanixAdminHub servers...',
+        'noSave',
+      )
+      try {
+        await stop()
+        Deno.exit(0)
+      } catch (error) {
+        // Deliberately does NOT call `Deno.exit()` here — see `start()`'s own doc for why. This
+        // package is frequently one of several independent participants sharing a process (e.g.
+        // alongside `@zanix/core`'s own `Zanix.start()`, which has no knowledge of this failure and
+        // must be free to keep running/exit on its own terms); a `stop()` failure scoped to THIS
+        // package's own cleanup must never escalate into killing the whole process out from under
+        // an unrelated, possibly still-healthy service. `stop()`'s own nested `try/finally` still
+        // guarantees every server this package started gets torn down regardless of this error.
+        logger.error(
+          'ZanixAdminHub.stop() failed during signal-triggered shutdown — the process was left ' +
+            "running (see start()'s own doc); an orchestrator's own SIGKILL-after-grace-period is " +
+            'the expected backstop here',
+          error,
+        )
+      }
+    }
+    Deno.addSignalListener('SIGINT', signalShutdown)
+    Deno.addSignalListener('SIGTERM', signalShutdown)
+
     return servers
   } finally {
     lifecycleGuard.clearStarting()
@@ -218,37 +210,25 @@ export const start = async (
 }
 
 async function startSequence(options: StartOptions): Promise<ServerID[]> {
-  const { triggers = {}, templates = {}, validateRegistry = false, auth, ...serverOptions } =
-    options
+  const {
+    triggers = {},
+    templates = {},
+    validateRegistry = false,
+    auth,
+    ...serverOptions
+  } = options
 
-  if (auth) {
-    const authHeaders = createServiceRegistryAuthHeaders(auth)
-    const registry = getServiceRegistry()
-    setTriggersAggregator(
-      new TriggersAggregator(
-        registry,
-        async (service) =>
-          new TriggersAdminClient({
-            baseUrl: service.adminBaseUrl,
-            headers: await authHeaders(service),
-          }),
-        async (service) =>
-          new DiscoveryAdminClient({
-            baseUrl: service.adminBaseUrl,
-            headers: await authHeaders(service),
-          }),
-      ),
-    )
-    setTemplatesDiscoveryClientFactory(
-      async (service) =>
-        new DiscoveryAdminClient({
-          baseUrl: service.adminBaseUrl,
-          headers: await authHeaders(service),
-        }),
-    )
-  }
-
-  await defineAdminMetadata(triggers, templates)
+  // Composition (registering controllers under their own Application, resolving/installing the
+  // `'service-registry'` resource, wiring `auth` if given) — see `defineAdminHubApp`'s own doc.
+  // `getAdminHubSubApps()` (Triggers/Templates' own physically-separate operations/mcp sub-apps —
+  // see `admin-hub-app.ts`'s own doc) activates alongside it in the SAME call, so a future sub-app
+  // sharing a root resource with `defineAdminHubApp` still resolves to the same instance.
+  // `activateApps` runs `onStart` too, but none of these apps declare one.
+  const hubSubApps = getAdminHubSubApps()
+  activated = await activateApps([
+    defineAdminHubApp({ triggers, templates, auth }),
+    ...hubSubApps,
+  ])
 
   // Only attempt the "public" bootstrap when the caller explicitly opted `triggers`/`templates`
   // out of the admin-Application/anchored default — the only way this package could ever have a
@@ -278,35 +258,108 @@ async function startSequence(options: StartOptions): Promise<ServerID[]> {
   // plain, unprefixed admin server — there is no auto-generated anchored id.
   const adminId = serverOptions.rest?.id ??
     resolveApplicationServerId(ADMIN_HUB_APPLICATION, 'rest')
-  const adminServers = await bootstrapServers({
-    ...serverOptions,
-    rest: {
-      ...serverOptions.rest,
-      id: adminId,
-      previousId: serverOptions.rest?.previousId ??
-        resolvePreviousApplicationServerId(ADMIN_HUB_APPLICATION, 'rest'),
-      application: ADMIN_HUB_APPLICATION,
-      // Unanchored (no `adminId`), this server would otherwise fall back to `bootstrapServers`'s
-      // own generic `'api'` default — the SAME default a "public" server (`wantsPublicRoute`
-      // above) uses. Sharing a port with no `ADMIN_HUB_SERVER_ID` set would then silently collide:
-      // the second `create()` call's handler would clobber the first's at the same dispatch key.
-      // Giving this server its own distinct default prefix keeps it safe to share a port with a
-      // public server even without opting into anchoring — only applied when unanchored; an
-      // anchored server's own id is already enough to avoid the collision, and an explicit caller
-      // `globalPrefix` (if any) always wins regardless.
-      globalPrefix: serverOptions.rest?.globalPrefix ?? (adminId ? undefined : 'admin-hub'),
-    },
-  })
+  const adminRest = {
+    ...serverOptions.rest,
+    id: adminId,
+    previousId: serverOptions.rest?.previousId ??
+      resolvePreviousApplicationServerId(ADMIN_HUB_APPLICATION, 'rest'),
+    // Unanchored (no `adminId`), this server would otherwise fall back to `bootstrapServers`'s
+    // own generic `'api'` default — the SAME default a "public" server (`wantsPublicRoute`
+    // above) uses. Sharing a port with no `ADMIN_HUB_SERVER_ID` set would then silently collide:
+    // the second `create()` call's handler would clobber the first's at the same dispatch key.
+    // Giving this server its own distinct default prefix keeps it safe to share a port with a
+    // public server even without opting into anchoring — only applied when unanchored; an
+    // anchored server's own id is already enough to avoid the collision, and an explicit caller
+    // `globalPrefix` (if any) always wins regardless.
+    globalPrefix: serverOptions.rest?.globalPrefix ??
+      (adminId ? undefined : 'admin-hub'),
+  }
+
+  // Not the last bootstrap call anymore whenever `hubSubApps` is non-empty (see below) — never
+  // purges route metadata other Applications in this same boot session still need.
+  const adminServers = await bootstrapAppServer(
+    ADMIN_HUB_APPLICATION,
+    { ...serverOptions, rest: adminRest },
+    hubSubApps.length === 0,
+  )
+
+  // Serves each hub sub-app's own auto-registered `/__zanix-ops/<name>/...` operations-dispatch
+  // route (see `registerRemoteDispatchRoutes`) — without this, a sub-app's `operations` would be
+  // reachable via same-process `ctx.remote()` (zero-network, no server needed) but NOT over real
+  // HTTP from another process, defeating the whole point of giving it its own addressable app
+  // identity.
+  //
+  // Deliberately does NOT reuse `adminRest`'s own `id`/`globalPrefix` — `WebServerManager`'s per-
+  // port dispatch table is keyed by `dispatchKey` (the anchored `serverID` when anchored, the raw
+  // `globalPrefix` otherwise — see `compileRuntime`'s own doc), which is NEVER derived from the
+  // Application name itself. Two Applications sharing the exact same `id`/`globalPrefix` combo
+  // don't merge their routes under that key — the LATER `create()` call's handler (bound to ONE
+  // Application) silently replaces the earlier one's, clobbering it entirely (a real bug this
+  // fixes: it previously made `ADMIN_HUB_APPLICATION`'s own `/triggers`/`/templates` controllers
+  // unreachable whenever they shared a dispatch key with a sub-app registered after them). Each
+  // sub-app instead resolves its OWN independent `id` (`resolveApplicationServerId(subAppName,
+  // 'rest')`, almost always unset in practice) and falls back to its OWN name as `globalPrefix`
+  // when unanchored — a distinct dispatch key from the hub's own and from every other sub-app's,
+  // safe to share the same port with regardless of how the hub itself is configured.
+  const subAppServers: ServerID[] = []
+  for (const [index, { definition }] of hubSubApps.entries()) {
+    const subId = resolveApplicationServerId(definition.name, 'rest')
+    // deno-lint-ignore no-await-in-loop
+    const started = await bootstrapAppServer(
+      definition.name,
+      {
+        ...serverOptions,
+        rest: {
+          ...serverOptions.rest,
+          id: subId,
+          previousId: resolvePreviousApplicationServerId(
+            definition.name,
+            'rest',
+          ),
+          globalPrefix: subId ? undefined : definition.name,
+        },
+      },
+      index === hubSubApps.length - 1,
+    )
+    subAppServers.push(...started)
+  }
 
   // Fire-and-forget, after every server is already listening — a temporarily-down registered peer
   // must never fail or delay this bootstrap; every per-entry failure is already caught internally.
   if (validateRegistry) checkServiceRegistryReachability()
 
-  return [...publicServers, ...adminServers]
+  return [...publicServers, ...adminServers, ...subAppServers]
 }
 
-/** Stops every server {@link start} started. */
+/**
+ * Also called automatically on `SIGINT`/`SIGTERM` (see {@link start}'s own doc) — the very first
+ * thing this does is remove those signal listeners, if `start()` registered any, so a second signal
+ * (or a second, direct `stop()` call) never re-triggers this teardown.
+ *
+ * Runs this app's own `onStop` (none declared today) and closes its resolved resources (the
+ * `'service-registry'` instance — a no-op `close()`, see `./registry/resource-type.ts`), then stops
+ * every server {@link start} started — same ordering `Zanix.stop()`/`ZanixAppDefinition.serve()`'s
+ * own `stop()` already guarantee elsewhere in this ecosystem. `closeAllConnections()` closes last,
+ * only after the HTTP servers themselves have finished draining in-flight requests — this package
+ * never creates connectors of its own, but the process it runs in may (e.g. a service sharing this
+ * process also uses `@zanix/datamaster`/`@zanix/auth`), and `ProgramModule`'s connector registry is
+ * process-wide, not scoped per app — same reasoning `@zanix/core`'s own `stop()` already applies.
+ */
 export const stop = async (): Promise<void> => {
+  if (signalShutdown) {
+    Deno.removeSignalListener('SIGINT', signalShutdown)
+    Deno.removeSignalListener('SIGTERM', signalShutdown)
+    signalShutdown = undefined
+  }
+
   lifecycleGuard.markStopped()
-  await webServerManager.stop(servers)
+  try {
+    if (activated) await deactivateApps(activated)
+  } finally {
+    try {
+      await webServerManager.stop(servers)
+    } finally {
+      await closeAllConnections()
+    }
+  }
 }

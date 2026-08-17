@@ -41,12 +41,17 @@ import { ADMIN_PROTOCOL_VERSION } from 'utils/constants.ts'
  * ```
  */
 export class TemplatesAdminClient extends RestClient {
+  /** Creates the client, stamping every request with {@link ADMIN_PROTOCOL_VERSION}. */
   constructor(
-    { headers, ...options }: NonNullable<ConstructorParameters<typeof RestClient>[0]> = {},
+    options: NonNullable<ConstructorParameters<typeof RestClient>[0]> = {},
   ) {
+    const { headers, ...opts } = typeof options === 'string' ? { contextId: options } : options
     super({
-      ...options,
-      headers: { [ADMIN_PROTOCOL_HEADER]: String(ADMIN_PROTOCOL_VERSION), ...headers },
+      ...opts,
+      headers: {
+        [ADMIN_PROTOCOL_HEADER]: String(ADMIN_PROTOCOL_VERSION),
+        ...headers,
+      },
     })
   }
 
@@ -57,7 +62,9 @@ export class TemplatesAdminClient extends RestClient {
 
   /** Gets a single template entry by `channel`/`name`. */
   public get(channel: Notifiers, name: string): Promise<ZanixTemplateAttrs> {
-    return this.http.get<ZanixTemplateAttrs>(`/admin/templates/${channel}/${name}`)
+    return this.http.get<ZanixTemplateAttrs>(
+      `/admin/templates/${channel}/${name}`,
+    )
   }
 
   /** Creates a new template entry. */
@@ -73,9 +80,12 @@ export class TemplatesAdminClient extends RestClient {
     name: string,
     changes: UpdateTemplateInput,
   ): Promise<ZanixTemplateAttrs> {
-    return this.http.put<ZanixTemplateAttrs>(`/admin/templates/${channel}/${name}`, {
-      body: JSON.stringify(changes),
-    })
+    return this.http.put<ZanixTemplateAttrs>(
+      `/admin/templates/${channel}/${name}`,
+      {
+        body: JSON.stringify(changes),
+      },
+    )
   }
 
   /** Deactivates a template entry by `channel`/`name` (soft delete, same as the local API). */
@@ -93,7 +103,7 @@ export class TemplatesAdminClient extends RestClient {
    */
   public sync(serviceId: string): Promise<SyncCodeTemplatesResult> {
     return this.http.post<SyncCodeTemplatesResult>('/admin/templates/sync', {
-      body: JSON.stringify({ service_id: serviceId }),
+      body: JSON.stringify({ serviceId }),
     })
   }
 }

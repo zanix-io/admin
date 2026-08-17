@@ -31,7 +31,9 @@ Deno.test({
     Deno.env.delete(ADMIN_TEMPLATES_APPLICATION_ENV)
     Deno.env.delete(TEMPLATES_MODEL_ENV)
 
-    const [serverId] = await bootstrapServers({ rest: { application: DEFAULT_APPLICATION } })
+    const [serverId] = await bootstrapServers({
+      rest: { application: DEFAULT_APPLICATION },
+    })
     assert(serverId, 'the public REST server should have been started')
 
     const info = webServerManager.info(serverId)

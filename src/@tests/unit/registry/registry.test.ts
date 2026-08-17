@@ -6,7 +6,10 @@ console.error = () => {}
 
 Deno.test('ServiceRegistry.get returns a registered entry', () => {
   const registry = new ServiceRegistry([
-    { serviceId: 'billing', adminBaseUrl: 'http://billing.internal:30248/billing-rest' },
+    {
+      serviceId: 'billing',
+      adminBaseUrl: 'http://billing.internal:30248/billing-rest',
+    },
   ])
 
   assertEquals(registry.get('billing'), {
@@ -18,7 +21,11 @@ Deno.test('ServiceRegistry.get returns a registered entry', () => {
 Deno.test('ServiceRegistry.get throws InternalError for an unregistered serviceId', () => {
   const registry = new ServiceRegistry([])
 
-  assertThrows(() => registry.get('unknown'), InternalError, 'No registered service found')
+  assertThrows(
+    () => registry.get('unknown'),
+    InternalError,
+    'No registered service found',
+  )
 })
 
 Deno.test('ServiceRegistry.has reflects registration without throwing', () => {
@@ -33,16 +40,25 @@ Deno.test('ServiceRegistry.has reflects registration without throwing', () => {
 Deno.test('ServiceRegistry.list returns every registered entry', () => {
   const registry = new ServiceRegistry([
     { serviceId: 'billing', adminBaseUrl: 'http://billing.internal' },
-    { serviceId: 'notifications', adminBaseUrl: 'http://notifications.internal' },
+    {
+      serviceId: 'notifications',
+      adminBaseUrl: 'http://notifications.internal',
+    },
   ])
 
-  assertEquals(registry.list().map((entry) => entry.serviceId), ['billing', 'notifications'])
+  assertEquals(registry.list().map((entry) => entry.serviceId), [
+    'billing',
+    'notifications',
+  ])
 })
 
 Deno.test('ServiceRegistry merges entries from ZANIX_ADMIN_SERVICES', () => {
   Deno.env.set(
     SERVICE_REGISTRY_ENV,
-    JSON.stringify([{ serviceId: 'from-env', adminBaseUrl: 'http://env.internal' }]),
+    JSON.stringify([{
+      serviceId: 'from-env',
+      adminBaseUrl: 'http://env.internal',
+    }]),
   )
 
   try {
@@ -60,7 +76,10 @@ Deno.test('ServiceRegistry merges entries from ZANIX_ADMIN_SERVICES', () => {
 Deno.test('ServiceRegistry: an env entry overrides a same-serviceId constructor entry', () => {
   Deno.env.set(
     SERVICE_REGISTRY_ENV,
-    JSON.stringify([{ serviceId: 'billing', adminBaseUrl: 'http://overridden.internal' }]),
+    JSON.stringify([{
+      serviceId: 'billing',
+      adminBaseUrl: 'http://overridden.internal',
+    }]),
   )
 
   try {
@@ -68,7 +87,10 @@ Deno.test('ServiceRegistry: an env entry overrides a same-serviceId constructor 
       { serviceId: 'billing', adminBaseUrl: 'http://original.internal' },
     ])
 
-    assertEquals(registry.get('billing').adminBaseUrl, 'http://overridden.internal')
+    assertEquals(
+      registry.get('billing').adminBaseUrl,
+      'http://overridden.internal',
+    )
   } finally {
     Deno.env.delete(SERVICE_REGISTRY_ENV)
   }
@@ -78,7 +100,11 @@ Deno.test('ServiceRegistry throws InternalError when ZANIX_ADMIN_SERVICES is inv
   Deno.env.set(SERVICE_REGISTRY_ENV, 'not-json')
 
   try {
-    assertThrows(() => new ServiceRegistry(), InternalError, 'not a valid JSON array')
+    assertThrows(
+      () => new ServiceRegistry(),
+      InternalError,
+      'not a valid JSON array',
+    )
   } finally {
     Deno.env.delete(SERVICE_REGISTRY_ENV)
   }
@@ -88,7 +114,11 @@ Deno.test('ServiceRegistry throws InternalError when ZANIX_ADMIN_SERVICES is not
   Deno.env.set(SERVICE_REGISTRY_ENV, JSON.stringify({ serviceId: 'billing' }))
 
   try {
-    assertThrows(() => new ServiceRegistry(), InternalError, 'not a valid JSON array')
+    assertThrows(
+      () => new ServiceRegistry(),
+      InternalError,
+      'not a valid JSON array',
+    )
   } finally {
     Deno.env.delete(SERVICE_REGISTRY_ENV)
   }

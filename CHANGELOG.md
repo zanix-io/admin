@@ -7,6 +7,154 @@ adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-08-17
+
+### Added
+
+- **Triggers/Templates `operations`/`mcp` moved to their own physically-separate Zanix App
+  sub-modules** — `triggers/hub-triggers-app.ts`, `templates/hub-templates-app.ts` (hub side),
+  `triggers/local-triggers-app.ts`, `templates/local-templates-app.ts` (local side), each with its
+  own file, own addressable app identity (`ADMIN_HUB_TRIGGERS_APPLICATION`,
+  `ADMIN_HUB_TEMPLATES_APPLICATION`, `ADMIN_TRIGGERS_APPLICATION`, `ADMIN_TEMPLATES_APPLICATION` —
+  `utils/constants.ts`), instead of being merged directly into `defineAdminHubApp`'s/
+  `defineLocalAdminApp`'s own `operations` field. `defineAdminHubApp`/`defineLocalAdminApp`
+  themselves now declare no `operations` at all — they're pure composers.
+  - **Breaking rename, safe for the same reason the earlier `service_id`→`serviceId` rename was**:
+    this operations/mcp surface was only ever exercised by this package's own test suite, never a
+    real external caller. `ctx.remote('admin-hub-triggers')`/`ctx.remote('admin-hub-templates')`
+    reach the hub's own operations now (not `ctx.remote('admin-hub')`);
+    `ctx.remote('admin-triggers')`/ `ctx.remote('admin-templates')` reach the local side's (not
+    `ctx.remote('admin')`).
+  - New `getAdminHubSubApps()`/`getLocalAdminSubApps()` (exported from `mod.ts`) return the list of
+    sub-apps to activate alongside `defineAdminHubApp`/`defineLocalAdminApp` — a data table (an
+    array of factory functions), not hardcoded call sites, so a future third sub-app (GQLIDE/
+    Swagger `operations`) is added by extending one array, never by editing `start.ts`'s own
+    composition/bootstrap logic.
+  - `start.ts` (`ZanixAdminHub.start()`) and `@zanix/core`'s own `start.ts`
+    (`Zanix.start({admin:
+    true})`) both now `activateApps([...])` the expanded list and
+    `bootstrapAppServer()` each sub-app's own Application — not just same-process `ctx.remote()`
+    reachability, but real HTTP reachability for each sub-app's own `/__zanix-ops/<name>/...`
+    dispatch route too, the necessary precondition for a future independent deploy (e.g.
+    `bootstrapRemoteApp(defineHubTriggersApp())`) — not yet wired for actual standalone deployment,
+    only the addressing/reachability groundwork.
+  - **Real bug found and fixed while wiring the extra `bootstrapAppServer` calls**: naively reusing
+    the parent app's own `id`/`globalPrefix` for each sub-app (reasoning that the
+    operations-dispatch controller's own route path already bakes the app name in, so nothing could
+    collide) was wrong. `WebServerManager`'s per-port dispatch table is keyed by `dispatchKey` (the
+    anchored `serverID` when anchored, the raw `globalPrefix` otherwise), which is **never derived
+    from the Application name** — two Applications sharing the exact same `id`/`globalPrefix` don't
+    merge their routes under that key, the LATER `create()` call's handler (bound to ONE
+    Application) silently replaces the earlier one's. This made `ADMIN_HUB_APPLICATION`'s own
+    `/triggers`/`/templates`/ `ADMIN_APPLICATION`'s own
+    `/admin/triggers`/`/admin/templates`/`/admin/service-token` controllers unreachable (404)
+    whenever a sub-app registered after them on the same dispatch key — caught via `@zanix/core`'s
+    own integration test suite (real HTTP fetches against both admin and its sub-apps together), not
+    the unit-level `getLocalOperation` tests, which never exercise the real HTTP dispatch path.
+    Fixed by giving each sub-app its own independent `id`
+    (`resolveApplicationServerId(subAppName, 'rest')`, almost always unset in practice) and its own
+    name as the `globalPrefix` fallback when unanchored — a distinct dispatch key regardless of how
+    the parent app itself is configured.
+
+### Documentation
+
+- **README now documents the Triggers/Templates sub-app split (above) as the official Extension
+  pattern reference** for the whole Zanix ecosystem — a new "Extension pattern reference" section
+  explains what qualifies as an Extension (adding capability without replacing anything, as a
+  separate Zanix App composed alongside a base one) versus an Override, walks through exactly how
+  `defineHubTriggersApp()`/`defineHubTemplatesApp()`/their local-side counterparts are structured
+  (own identity, `routes: false`, shared state via an already-installed singleton rather than their
+  own `dependencies`/`resources`), and gives a step-by-step template for a third-party package
+  wanting to replicate the same shape. Documentation only — no behavior change.
+
+- `ZanixAdminHub.start()` now traps `SIGINT`/`SIGTERM` automatically (no opt-out) and drains its
+  servers via `ZanixAdminHub.stop()` before exiting — same pattern `@zanix/core`'s own
+  `Zanix.start()` already established. Needed independently here since `ZanixAdminHub` is a real
+  standalone deployable entrypoint in its own right, not always run through `Zanix.start()`.
+  `ZanixAdminHub.stop()` now also closes connector connections (`closeAllConnections()`) as its last
+  step, for the (shared-process) case where something else in the same process registered one.
+  Unlike `Zanix.start()` (which owns the whole process it runs in), a `stop()` failure during this
+  signal-triggered shutdown does NOT force-exit the process — this package is frequently just one
+  participant sharing a process with an unrelated, independent entrypoint (e.g. a business service's
+  own `Zanix.start()`), and this package's own cleanup trouble must never take that service down
+  with it; the error is logged instead, leaving an orchestrator's own SIGKILL-after-grace-period as
+  the backstop.
+- **`AdminHubModuleEntry`/`registerAdminHubModules`** (internal, `admin-hub-app.ts`) — genericizes
+  `defineAdminHubApp`'s controller registration into one data table instead of two hand-duplicated
+  `if (x !== false) {...}` blocks (one per module). Adding a third hub-composable module (e.g. a
+  future GQLIDE/Swagger surface) now means adding one entry here, never touching the registration
+  loop itself. Purely an internal refactor — `defineAdminHubApp`'s own public options/behavior are
+  unchanged, verified against the full functional test suite (triggers/templates enable/disable,
+  application overrides, auth wiring).
+- **Triggers/Templates now expose real `operations`** (`ctx.remote(...).call(...)`/MCP), reachable
+  alongside both `defineAdminHubApp` and `defineLocalAdminApp` (via their own sub-apps — see the
+  physically-separate sub-modules entry above) — a second, zero-network path to the exact same
+  business logic each side's REST controllers already call, for another Zanix App co-located in the
+  same process. On the hub side (`hubTriggersOperations`, `triggers/hub-triggers-app.ts`), Triggers
+  operations proxy through the installed `TriggersAggregator`, same as the REST controller. On the
+  local side (`localTriggersOperations`, `triggers/local-triggers-app.ts`), they call
+  `TriggersAdminService` directly via `resolveTarget`. Templates operations
+  (`buildTemplatesOperations`, the new `templates/templates-operations.ts`) are shared verbatim
+  between both sides, since both deployments call the exact same `TemplatesAdminService` class. Only
+  each side's `list`/`get` operations opt into `mcp` — mutating operations
+  (`create`/`update`/`remove`) are deliberately excluded from MCP exposure, since giving an agent
+  unrestricted write access to triggers/templates configuration is a real risk. Mutating Templates
+  operations pass a fixed `'zanix-operation'` sentinel as the `updatedBy` audit-trail identity,
+  since an operation's `RuntimeContext` never carries a user session (app-to-app, not user-scoped)
+  the way an HTTP request's `ctx.session?.id` does.
+
+### Changed
+
+- **`defineAdminHubApp`'s `setup()` now always wires `TriggersAggregator`** (via
+  `setTriggersAggregator`) against the DI-resolved `registry` (`ctx.resource('registry')`),
+  regardless of whether `auth` is given. Previously this only ran inside `if (auth)`; the no-`auth`
+  case relied entirely on `getTriggersAggregator()`'s own lazy default, which happened to work only
+  because the `'service-registry'` resource factory also installs the same instance into
+  `setServiceRegistry`'s global — a correct but implicit/order-dependent path. `authHeaders` (from
+  `auth`) now only decides which client factory is used (authenticated, or `TriggersAggregator`'s
+  own unauthenticated default) — never whether the aggregator gets wired at all. No behavior change
+  for real deployments (the resolved instance was already identical either way), just removes an
+  implicit dependency on lazy-default timing.
+- **Investigated eliminating `ServiceRegistry`'s process-wide `getServiceRegistry`/
+  `setServiceRegistry` singleton** in favor of `@zanix/app`'s DI resource system throughout, or
+  `@zanix/server`'s `@Provider`/`ProgramModule.providers`. Concluded neither is a real improvement,
+  and made no further code change beyond the aggregator-wiring fix above:
+  - `@Provider`/`ProgramModule.providers` auto-instantiates via a bare `new Target(context)` with no
+    way to register an already-built, `entries`-configured instance — not viable for a
+    manifest-configurable registry.
+  - `setServiceRegistry` being public isn't an accidental leak: this package documents (`mod.ts`)
+    wiring `createTriggersController()`/`createTemplatesController()` directly into a caller's own
+    `@zanix/core`/`@zanix/server` bootstrap with no Zanix App/DI graph at all — for that path,
+    `setServiceRegistry` is the ONLY configuration entrypoint there is, not a workaround for a DI
+    mechanism that path could use instead.
+  - The global is therefore the correct, necessary shape for supporting both initialization paths
+    (`ZanixAdminHub.start()`'s DI graph, and direct controller wiring) against one shared instance —
+    `resource-type.ts` already reuses the installed instance rather than ever creating a second one.
+    `registry.ts`/`resource-type.ts`'s doc comments were rewritten to state this explicitly, so
+    neither reads as a temporary or accidental mechanism.
+
+### Fixed
+
+- **Breaking (internal wire shape):** Triggers' route params (`TriggerServiceParamsRTO`/
+  `TriggerServiceModelParamsRTO`, `triggers.handler.ts`'s route patterns) renamed `service_id` →
+  `serviceId`. The snake_case naming was a workaround for a real `@zanix/server` bug (a route
+  param's own NAME was silently lowercased — see that package's own changelog), not a deliberate
+  convention; now that the router preserves param-name casing, it's inconsistent with Templates' own
+  `serviceId` (already camelCase) to keep it. The actual URL segments a caller sends
+  (`/triggers/:serviceId/:model`) are unchanged — this only renames the internal route-pattern/RTO
+  property, never the positional path structure itself.
+- `TemplatesAdminClient.sync()` sent `{service_id: serviceId}` (snake_case) in its POST body while
+  the server-side `SyncTemplatesRTO` expects `serviceId` (camelCase) — a real mismatch, though this
+  client is never called anywhere in this package's own production code today (an external-consumer
+  library export). Now sends `{serviceId}`, matching the RTO.
+- `ZanixAdminHub.start({ triggers: false, templates: false })` now starts one server (previously
+  zero) and never warns "no server was started". `defineAdminHubApp` always declares non-empty
+  `operations` (see Added, above) regardless of the `triggers`/`templates` REST options, and
+  `@zanix/app`'s `registerRemoteDispatchRoutes` registers a real `/__zanix-ops/admin-hub/...`
+  controller for any app with non-empty `operations` — so a server now starts to serve that route
+  even with both REST controllers skipped. This is an intentional consequence of adding
+  `operations`, not a regression; `start-no-routes.test.ts`'s assertions were updated to match.
+
 ## [1.0.0] - 2026-08-03
 
 Requires `@zanix/server@^3.0.0` or later (the Application/`anchored`/`Runtime` model this release's

@@ -34,7 +34,9 @@ Deno.test({
     assertEquals(triggers.status, 401)
     await triggers.body?.cancel()
 
-    const triggersDiscovery = await fetch(`${baseUrl}/.well-known/zanix/triggers`)
+    const triggersDiscovery = await fetch(
+      `${baseUrl}/.well-known/zanix/triggers`,
+    )
     assertEquals(triggersDiscovery.status, 401)
     await triggersDiscovery.body?.cancel()
 
@@ -43,7 +45,9 @@ Deno.test({
     assertEquals(templates.status, 404)
     await templates.body?.cancel()
 
-    const templatesDiscovery = await fetch(`${baseUrl}/.well-known/zanix/templates`)
+    const templatesDiscovery = await fetch(
+      `${baseUrl}/.well-known/zanix/templates`,
+    )
     assertEquals(templatesDiscovery.status, 404)
     await templatesDiscovery.body?.cancel()
 

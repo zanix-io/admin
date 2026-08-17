@@ -11,13 +11,14 @@
 1. [Description](#-description)
 2. [Installation](#-installation)
 3. [Basic Usage](#-basic-usage)
-4. [Service Registry](#-service-registry)
-5. [Triggers Aggregator](#-triggers-aggregator)
-6. [Templates API](#-templates-api)
-7. [Documentation](#-documentation)
-8. [Contributing](#-contributing)
-9. [Changelog](#-changelog)
-10. [License](#-license)
+4. [Extension pattern reference — how Triggers/Templates are composed](#-extension-pattern-reference--how-triggerstemplates-are-composed)
+5. [Service Registry](#-service-registry)
+6. [Triggers Aggregator](#-triggers-aggregator)
+7. [Templates API](#-templates-api)
+8. [Documentation](#-documentation)
+9. [Contributing](#-contributing)
+10. [Changelog](#-changelog)
+11. [License](#-license)
 
 ---
 
@@ -106,6 +107,14 @@ Requires a database connector configured (`MONGO_URI`, plus `TEMPLATES_MODEL_NAM
 `DATABASE_TEMPLATES=true` for `/templates`), same as any `@zanix/core`-based service with DB-backed
 templates. `ZanixAdminHub.stop()` stops whatever it started.
 
+`ZanixAdminHub.start()` also traps `SIGINT`/`SIGTERM` automatically (no opt-out) and runs
+`ZanixAdminHub.stop()` before exiting — this is a real standalone deployable service, so it drains
+in-flight requests on its own the same way `@zanix/core`'s `Zanix.start()` does for a business
+service, without needing to be run through it. Unlike `Zanix.start()`, a `stop()` failure during
+this shutdown never force-exits the process — this package is often just one participant sharing a
+process with an unrelated entrypoint (e.g. a business service's own `Zanix.start()`), so it only
+logs the error instead of risking taking that service down too.
+
 ### Manual wiring: using `TriggersAggregator` directly
 
 For an app that builds its own bootstrap instead of using `ZanixAdminHub.start()`:
@@ -114,8 +123,14 @@ For an app that builds its own bootstrap instead of using `ZanixAdminHub.start()
 import { ServiceRegistry, TriggersAggregator } from 'jsr:@zanix/admin@[version]'
 
 const registry = new ServiceRegistry([
-  { serviceId: 'billing', adminBaseUrl: 'http://billing.internal:30248/billing-rest' },
-  { serviceId: 'inventory', adminBaseUrl: 'http://inventory.internal:30248/inventory-rest' },
+  {
+    serviceId: 'billing',
+    adminBaseUrl: 'http://billing.internal:30248/billing-rest',
+  },
+  {
+    serviceId: 'inventory',
+    adminBaseUrl: 'http://inventory.internal:30248/inventory-rest',
+  },
 ])
 
 const triggers = new TriggersAggregator(registry)
@@ -123,6 +138,93 @@ const triggers = new TriggersAggregator(registry)
 const all = await triggers.list() // fanned out across every registered service, tagged by serviceId
 const one = await triggers.get('billing', 'Invoice') // proxied straight to that service
 ```
+
+### Composing this package's own Zanix Apps directly
+
+`ZanixAdminHub.start()` and `@zanix/core`'s own `admin: true` option are both thin wrappers over two
+`@zanix/app` manifests this package exports directly — `defineAdminHubApp(options)` (the central
+aggregator/proxy, `/triggers`/`/templates`) and `defineLocalAdminApp()` (the embedded,
+business-service-side CRUD, `/admin/triggers`/`/admin/templates`/`/admin/service-token`). A host
+composing its own set of Zanix Apps via `@zanix/core`'s `apps` option or `activateApps` directly can
+install either alongside its own apps, without going through `ZanixAdminHub`/`admin: true` at all:
+
+```typescript
+import Zanix from 'jsr:@zanix/core@[version]'
+import { defineAdminHubApp } from 'jsr:@zanix/admin@[version]'
+
+await Zanix.start({
+  apps: {
+    'admin-hub': {
+      definition: defineAdminHubApp({ auth: { serviceId: 'zanix-admin-hub' } }),
+      server: { rest: { port: 9000 } },
+    },
+  },
+})
+```
+
+`defineAdminHubApp` declares one dependency, `registry` (type `'service-registry'`) — override it
+via the host's own `resources`/`uses` to share a single `ServiceRegistry` instance across this app
+and others in the same process, instead of relying solely on `setServiceRegistry`.
+
+---
+
+## 🧬 Extension pattern reference — how Triggers/Templates are composed
+
+This package is the reference example, in the whole Zanix ecosystem, of the **Extension** pattern
+for customizing a Zanix App without forking it: adding capability that doesn't replace anything
+already there, as one or more SEPARATE Zanix Apps composed alongside a base app, rather than a
+change bolted onto the base app's own manifest. (Contrast with **Override** — replacing a piece of
+existing behavior, via `resources`/`uses`, `registerCoreProviderSlot`, or `@zanix/app`'s
+`behaviors`/`ctx.behavior()` — a different question this pattern doesn't answer.)
+
+**What actually happens, concretely**: `defineAdminHubApp()`'s own `/triggers`/`/templates` REST
+surface used to also own the `operations`/`mcp` surface other apps/agents invoke via
+`ctx.remote('admin-hub').call(...)`. That surface was extracted into its own, physically-separate
+Zanix Apps — `defineHubTriggersApp()`/`defineHubTemplatesApp()` (hub side,
+`src/modules/triggers/hub-triggers-app.ts`/`src/modules/templates/hub-templates-app.ts`), and
+`defineLocalTriggersApp()`/`defineLocalTemplatesApp()` (local side, same shape) — each:
+
+- Has its **own** `name` (its own Application/route-dispatch identity) and its **own**
+  `routes:
+  false` — a sub-app owns no REST surface of its own; the REST controller stays on the
+  parent (`defineAdminHubApp`/`defineLocalAdminApp`), only the `operations`/`mcp` invocation surface
+  moved.
+- Declares its own `operations`, ADDING a new invocation surface — never editing or replacing
+  anything the parent already exposes.
+- Shares state with the parent WITHOUT owning any `dependencies`/`resources` of its own — each
+  sub-app reads an already-installed module-level singleton the parent's own `setup()` wires (e.g.
+  `getTriggersAggregator()`), so composing more sub-apps costs nothing extra in resource-resolution
+  complexity. A sub-app needing real DI-managed state instead would share it via the parent's own
+  `uses`/root resources, memoized the same way any two apps sharing a resource already are.
+
+**How they're actually activated — always together, never separately**: `getAdminHubSubApps()`/
+`getLocalAdminSubApps()` (`src/modules/admin-hub-app.ts`/`src/modules/local-admin-app.ts`) return
+the current list of sub-app factories (`Array<() => ZanixAppDefinition>`), composed via ONE call:
+
+```typescript
+await activateApps([defineAdminHubApp(options), ...getAdminHubSubApps()])
+```
+
+`ZanixAdminHub.start()`/`@zanix/core`'s own `admin: true` option already do this internally — an
+author consuming this package through either of those never has to call `getAdminHubSubApps()`
+directly. It matters for anyone extending THIS package itself, or building their own package that
+wants the same shape.
+
+**Adding a third sub-app** (a template for any team replicating this pattern in their own package):
+
+1. Write a new `defineXSubApp(): ZanixAppDefinition` factory — own `name`, `routes: false`, its own
+   `operations`/`mcp`, reading whatever shared state it needs from an already-installed singleton
+   (or the parent's own shared resources).
+2. Add that factory to `HUB_SUB_APP_FACTORIES`/`LOCAL_SUB_APP_FACTORIES` (or your own package's
+   equivalent list) — never by editing the parent app's own manifest body.
+3. Nothing else changes: `getAdminHubSubApps()`'s callers keep working unmodified, since they only
+   ever iterate the list, never a fixed arity.
+
+This is deliberately NOT a generic "extension registry" with its own install/uninstall lifecycle —
+it's a plain array of factory functions, composed through `activateApps()`'s own existing "list of
+independent apps" contract. No new primitive was introduced to make this work; it's the same
+composition mechanism every Zanix App already uses, applied to a package's own sub-apps instead of
+to apps two different teams own.
 
 ---
 
