@@ -13,6 +13,7 @@ import { AuthTokenValidation, createAppToken, jwtValidationGuard } from '@zanix/
 import { generateRSAKeys } from '@zanix/helpers'
 import {
   ADMIN_AUTH_TYPES,
+  ADMIN_DLQ_ROLE,
   ADMIN_ROLE,
   ADMIN_TEMPLATES_ROLE,
   ADMIN_TRIGGERS_ROLE,
@@ -22,8 +23,8 @@ import {
 // `AuthTokenValidation`/`jwtValidationGuard({ permissions: [...], type: ADMIN_AUTH_TYPES })` — every
 // existing functional test only proves the REJECTION paths (no token → 401, garbage token → 403),
 // never that a genuine, correctly-signed `type: 'api'` credential with the right permissions is
-// actually ACCEPTED. This test closes that gap for all four shapes at once (two CRUD-style routes
-// via `@AuthTokenValidation`, two Discovery-style registrations via `defineDiscovery`'s own
+// actually ACCEPTED. This test closes that gap for all six shapes at once (three CRUD-style routes
+// via `@AuthTokenValidation`, three Discovery-style registrations via `defineDiscovery`'s own
 // `guards` option) — mirroring the exact guard configuration each real file uses, without needing a
 // live MongoDB, since these plain test routes never touch a repository.
 stub(console, 'info')
@@ -45,13 +46,20 @@ Deno.test({
     const accessToken = await createAppToken({
       type: 'api',
       subject: 'test-service',
+      // `verifyJWT` unconditionally rejects a token with no `exp` claim (`MISSING_TOKEN_EXPIRATION`)
+      // — omitting `expiration` here produced exactly that, masked as a generic 403 by the guard's
+      // own catch-all.
+      expiration: '1h',
       payload: {
-        permissions: [ADMIN_ROLE, ADMIN_TRIGGERS_ROLE, ADMIN_TEMPLATES_ROLE],
+        permissions: [ADMIN_ROLE, ADMIN_TRIGGERS_ROLE, ADMIN_TEMPLATES_ROLE, ADMIN_DLQ_ROLE],
       },
     })
 
     await ProgramModule.defineApplication('admin-auth-type-api-check', () => {
-      // Mirrors `local-triggers.handler.ts`/`templates.handler.ts`'s own CRUD guard exactly.
+      // Mirrors the CRUD guard `defineAdminMetadata()` builds for
+      // `/admin/triggers`/`/admin/templates`/`/admin/dlq` exactly (same permissions/type shape),
+      // even though those three now take it as an injected `guards`/`AuthTokenValidation` option
+      // rather than hardcoding it.
       @Controller()
       class _CrudCheckController extends ZanixController {
         @Get('check/triggers-crud')
@@ -71,9 +79,18 @@ Deno.test({
         public templatesCrud() {
           return { ok: true }
         }
+
+        @Get('check/dlq-crud')
+        @AuthTokenValidation({
+          permissions: [ADMIN_ROLE, ADMIN_DLQ_ROLE],
+          type: ADMIN_AUTH_TYPES,
+        })
+        public dlqCrud() {
+          return { ok: true }
+        }
       }
 
-      // Mirrors `metadata.ts`'s own two Discovery guards exactly.
+      // Mirrors `metadata.ts`'s own three Discovery guards exactly.
       ProgramModule.defineDiscovery('check-triggers', {
         snapshot: () => Promise.resolve([]),
       }, {
@@ -94,6 +111,16 @@ Deno.test({
           }),
         ],
       })
+      ProgramModule.defineDiscovery('check-dlq', {
+        snapshot: () => Promise.resolve([]),
+      }, {
+        guards: [
+          jwtValidationGuard({
+            permissions: [ADMIN_ROLE, ADMIN_DLQ_ROLE],
+            type: ADMIN_AUTH_TYPES,
+          }),
+        ],
+      })
     })
 
     const [serverId] = await bootstrapServers({
@@ -109,8 +136,10 @@ Deno.test({
     const paths = [
       'api/check/triggers-crud',
       'api/check/templates-crud',
+      'api/check/dlq-crud',
       'api/.well-known/zanix/check-triggers',
       'api/.well-known/zanix/check-templates',
+      'api/.well-known/zanix/check-dlq',
     ]
     const results = await Promise.all(
       paths.map(async (path) => {

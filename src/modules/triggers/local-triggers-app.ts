@@ -8,8 +8,9 @@ import { ADMIN_TRIGGERS_APPLICATION } from '../../utils/constants.ts'
 
 /**
  * This service's own persisted-triggers operations — `ctx.remote('admin-triggers').call(...)`/MCP
- * surface for `TriggersAdminService`, the SAME business logic `local-triggers.handler.ts`'s
- * `/admin/triggers` REST controller already calls, resolved here via `resolveTarget` (the same DI
+ * surface for `TriggersAdminService`, the SAME business logic `@zanix/datamaster/triggers-api`'s
+ * `createTriggersAdminController`/`/admin/triggers` REST controller already calls, resolved here
+ * via `resolveTarget` (the same DI
  * accessor `@zanix/app`'s own `AppSetupContext.resolve()` uses internally — an operation handler
  * has no `HandlerContext`/`this.interactor`, so this is how it reaches a DI-managed Interactor).
  * `resolveTarget(ADMIN_TRIGGERS_APPLICATION, ...)` scopes it by THIS sub-app's own stable name,

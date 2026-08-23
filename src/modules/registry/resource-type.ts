@@ -31,7 +31,7 @@ import type { ServiceRegistryEntry } from 'typings/registry.ts'
  * initialization paths above install into — so `TriggersAggregator`/`TemplatesAdminService`, which
  * resolve the registry via {@link getServiceRegistry} rather than through a Zanix App's own
  * `ctx.resource()` (they run from plain functions/classic `@zanix/server` controllers that have no
- * DI graph to resolve from at all — see `templates.handler.ts`'s `sync()` route), see the exact same
+ * DI graph to resolve from at all — see `templates-sync.handler.ts`'s `sync()` route), see the exact same
  * instance `ctx.resource('registry')` resolves to for any Zanix App declaring this slot. One
  * registry per process, reachable both ways by design — not two independently-built instances.
  *

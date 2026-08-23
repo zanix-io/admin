@@ -112,6 +112,47 @@ Deno.test('TemplatesAdminClient.update PUTs the given changes', async () => {
   assertEquals(url, 'http://svc.internal:1234/admin/templates/email/welcome')
 })
 
+Deno.test('TemplatesAdminClient.get encodes a name containing a path separator', async () => {
+  const mockFetch = spy((_url: string, _opts: any) =>
+    jsonResponse({ channel: 'email', name: 'a/b', ...TEMPLATE_DEFAULTS })
+  )
+  globalThis.fetch = mockFetch as unknown as typeof fetch
+
+  const client = new TemplatesAdminClient({ baseUrl: 'http://svc.internal:1234' })
+  await client.get('email', '../other')
+
+  const [url] = mockFetch.calls[0].args as [string, any]
+  assertEquals(url, 'http://svc.internal:1234/admin/templates/email/..%2Fother')
+})
+
+Deno.test('TemplatesAdminClient.update encodes a name containing a path separator', async () => {
+  const mockFetch = spy((_url: string, opts: any) => {
+    assertEquals(opts.method, 'PUT')
+    return jsonResponse({ channel: 'email', name: 'x', ...TEMPLATE_DEFAULTS })
+  })
+  globalThis.fetch = mockFetch as unknown as typeof fetch
+
+  const client = new TemplatesAdminClient({ baseUrl: 'http://svc.internal:1234' })
+  await client.update('email', 'a/b', { hbs: '<p>new</p>' })
+
+  const [url] = mockFetch.calls[0].args as [string, any]
+  assertEquals(url, 'http://svc.internal:1234/admin/templates/email/a%2Fb')
+})
+
+Deno.test('TemplatesAdminClient.remove encodes a name containing a path separator', async () => {
+  const mockFetch = spy((_url: string, opts: any) => {
+    assertEquals(opts.method, 'DELETE')
+    return jsonResponse({ deactivated: 'x' })
+  })
+  globalThis.fetch = mockFetch as unknown as typeof fetch
+
+  const client = new TemplatesAdminClient({ baseUrl: 'http://svc.internal:1234' })
+  await client.remove('email', 'a/b')
+
+  const [url] = mockFetch.calls[0].args as [string, any]
+  assertEquals(url, 'http://svc.internal:1234/admin/templates/email/a%2Fb')
+})
+
 Deno.test('TemplatesAdminClient accepts a bare contextId string (RestClient shape)', () => {
   const client = new TemplatesAdminClient('svc-context')
 

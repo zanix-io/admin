@@ -2,6 +2,7 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { stub } from '@std/testing/mock'
 import { InternalError } from '@zanix/errors'
+import logger from '@zanix/logger'
 import { ServiceRegistry } from 'modules/registry/registry.ts'
 import {
   type AggregatedTrigger,
@@ -280,6 +281,139 @@ Deno.test({
       )
     } finally {
       fetchStub.restore()
+    }
+  },
+})
+
+Deno.test({
+  name:
+    "TriggersAggregator.list logs (logger.error) and rethrows unchanged when one service's Discovery fetch fails",
+  fn: async () => {
+    const boom = new Error('network down')
+    const discoveryClientFactory: TriggersDiscoveryClientFactory = () =>
+      fakeDiscoveryClient(() => Promise.reject(boom))
+    const errorStub = stub(logger, 'error')
+
+    try {
+      const aggregator = new TriggersAggregator(
+        new ServiceRegistry([{ serviceId: 'billing', adminBaseUrl: 'http://billing.internal' }]),
+        undefined,
+        discoveryClientFactory,
+      )
+
+      const rejected = await assertRejects(() => aggregator.list())
+      assertEquals(rejected, boom)
+
+      assertEquals(errorStub.calls.length, 1)
+      assertEquals(errorStub.calls[0].args[1], boom)
+      const message = String(errorStub.calls[0].args[0])
+      assert(message.includes('ADMIN_TRIGGERS_DISCOVERY_FAILED'))
+      assert(message.includes('billing'))
+    } finally {
+      errorStub.restore()
+    }
+  },
+})
+
+Deno.test({
+  name:
+    'TriggersAggregator.get logs (logger.error) and rethrows unchanged when the proxy call fails',
+  fn: async () => {
+    const boom = new Error('service unreachable')
+    const clientFactory: TriggersClientFactory = () =>
+      fakeClient({ get: () => Promise.reject(boom) })
+    const errorStub = stub(logger, 'error')
+
+    try {
+      const aggregator = new TriggersAggregator(registry, clientFactory)
+
+      const rejected = await assertRejects(() => aggregator.get('billing', 'Invoice'))
+      assertEquals(rejected, boom)
+
+      assertEquals(errorStub.calls.length, 1)
+      assertEquals(errorStub.calls[0].args[1], boom)
+      const message = String(errorStub.calls[0].args[0])
+      assert(message.includes('ADMIN_TRIGGERS_PROXY_FAILED'))
+      assert(message.includes('billing'))
+      assert(message.includes('Invoice'))
+    } finally {
+      errorStub.restore()
+    }
+  },
+})
+
+Deno.test({
+  name:
+    'TriggersAggregator.create logs (logger.error) and rethrows unchanged when the proxy call fails',
+  fn: async () => {
+    const boom = new Error('service unreachable')
+    const clientFactory: TriggersClientFactory = () =>
+      fakeClient({ create: () => Promise.reject(boom) })
+    const errorStub = stub(logger, 'error')
+
+    try {
+      const aggregator = new TriggersAggregator(registry, clientFactory)
+
+      const rejected = await assertRejects(
+        () => aggregator.create('billing', { model: 'Invoice', active: true, triggers: {} }),
+      )
+      assertEquals(rejected, boom)
+
+      assertEquals(errorStub.calls.length, 1)
+      assertEquals(errorStub.calls[0].args[1], boom)
+      assert(String(errorStub.calls[0].args[0]).includes('ADMIN_TRIGGERS_PROXY_FAILED'))
+    } finally {
+      errorStub.restore()
+    }
+  },
+})
+
+Deno.test({
+  name:
+    'TriggersAggregator.update logs (logger.error) and rethrows unchanged when the proxy call fails',
+  fn: async () => {
+    const boom = new Error('service unreachable')
+    const clientFactory: TriggersClientFactory = () =>
+      fakeClient({ update: () => Promise.reject(boom) })
+    const errorStub = stub(logger, 'error')
+
+    try {
+      const aggregator = new TriggersAggregator(registry, clientFactory)
+
+      const rejected = await assertRejects(
+        () => aggregator.update('billing', 'Invoice', { active: false }),
+      )
+      assertEquals(rejected, boom)
+
+      assertEquals(errorStub.calls.length, 1)
+      assertEquals(errorStub.calls[0].args[1], boom)
+      assert(String(errorStub.calls[0].args[0]).includes('ADMIN_TRIGGERS_PROXY_FAILED'))
+    } finally {
+      errorStub.restore()
+    }
+  },
+})
+
+Deno.test({
+  name:
+    'TriggersAggregator.remove logs (logger.error) and rethrows unchanged when the proxy call fails',
+  fn: async () => {
+    const boom = new Error('service unreachable')
+    const clientFactory: TriggersClientFactory = () =>
+      fakeClient({ remove: () => Promise.reject(boom) })
+    const errorStub = stub(logger, 'error')
+
+    try {
+      const aggregator = new TriggersAggregator(registry, clientFactory)
+
+      const rejected = await assertRejects(() => aggregator.remove('billing', 'Invoice'))
+      assertEquals(rejected, boom)
+
+      assertEquals(errorStub.calls.length, 1)
+      assertEquals(errorStub.calls[0].args[1], boom)
+      assert(String(errorStub.calls[0].args[0]).includes('ADMIN_TRIGGERS_PROXY_FAILED'))
+    } finally {
+      errorStub.restore()
     }
   },
 })

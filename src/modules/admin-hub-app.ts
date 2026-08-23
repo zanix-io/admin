@@ -4,49 +4,82 @@ import type { ZanixAppDefinition } from '@zanix/app'
 import { defineZanixApp } from '@zanix/app'
 import type { DEFAULT_APPLICATION } from '@zanix/server'
 import { ProgramModule } from '@zanix/server'
-import { ADMIN_HUB_APPLICATION } from '../utils/constants.ts'
-import type { TemplatesControllerOptions } from './templates/templates.handler.ts'
+import { jwtValidationGuard } from '@zanix/auth'
+import type { TemplatesControllerOptions } from '@zanix/notifications/templates-api'
+import {
+  ADMIN_AUTH_TYPES,
+  ADMIN_HUB_APPLICATION,
+  ADMIN_ROLE,
+  ADMIN_TEMPLATES_ROLE,
+} from 'utils/constants.ts'
+import { ADMIN_VERSION_PROTOCOL } from './protocol/version-protocol.ts'
 import type { TriggersControllerOptions } from './triggers/triggers.handler.ts'
 import type { ServiceRegistry } from './registry/registry.ts'
 import { createServiceRegistryAuthHeaders } from './registry/auth.ts'
 import { setTriggersAggregator, TriggersAggregator } from './triggers/triggers.aggregator.ts'
 import { TriggersAdminClient } from './triggers/triggers.client.ts'
+import { DlqAggregator, setDlqAggregator } from './dlq/dlq.aggregator.ts'
+import { DlqAdminClient } from './dlq/dlq.client.ts'
 import { DiscoveryAdminClient } from './discovery/discovery.client.ts'
 import { setTemplatesDiscoveryClientFactory } from './templates/templates-sync.ts'
+import type { RegistryControllerOptions } from './registry/registry.handler.ts'
 import { defineHubTriggersApp } from './triggers/hub-triggers-app.ts'
 import { defineHubTemplatesApp } from './templates/hub-templates-app.ts'
+import { defineHubDlqApp } from './dlq/hub-dlq-app.ts'
+import type { DlqControllerOptions } from './dlq/dlq.handler.ts'
 import './registry/resource-type.ts'
 
 /**
  * Every additional Zanix App `ZanixAdminHub.start()`/a host composing `defineAdminHubApp` directly
- * should activate ALONGSIDE it — today, Triggers'/Templates' own `operations`/`mcp` surfaces, each
- * physically separated into their own file/app identity (`triggers/hub-triggers-app.ts`,
- * `templates/hub-templates-app.ts`) rather than declared inline on `defineAdminHubApp` itself. A
- * future third hub sub-app (e.g. GQLIDE/Swagger `operations`) is added here, never by editing
- * `defineAdminHubApp`'s own body — see `getAdminHubSubApps`'s own doc for the composition contract.
+ * should activate ALONGSIDE it — today, Triggers'/Templates'/DLQ's own `operations`/`mcp` surfaces,
+ * each physically separated into their own file/app identity (`triggers/hub-triggers-app.ts`,
+ * `templates/hub-templates-app.ts`, `dlq/hub-dlq-app.ts`) rather than declared inline on
+ * `defineAdminHubApp` itself. A future fourth hub sub-app (e.g. GQLIDE/Swagger `operations`) is
+ * added here, never by editing `defineAdminHubApp`'s own body — see `getAdminHubSubApps`'s own doc
+ * for the composition contract. Each entry's `enabled` predicate reads the SAME
+ * `triggers`/`templates`/`dlq` option {@link registerAdminHubModules} already gates that resource's
+ * REST controller by, so a new entry here is never accidentally composed on a different signal.
  */
-const HUB_SUB_APP_FACTORIES: Array<() => ZanixAppDefinition> = [
-  defineHubTriggersApp,
-  defineHubTemplatesApp,
+const HUB_SUB_APP_ENTRIES: Array<
+  { factory: () => ZanixAppDefinition; enabled: (options: AdminHubSubAppOptions) => boolean }
+> = [
+  { factory: defineHubTriggersApp, enabled: (options) => options.triggers !== false },
+  { factory: defineHubTemplatesApp, enabled: (options) => options.templates !== false },
+  { factory: defineHubDlqApp, enabled: (options) => options.dlq !== false },
 ]
+
+/** The subset of {@link AdminHubAppOptions} that decides which hub sub-app
+ * {@link getAdminHubSubApps} composes — same `false`-to-skip meaning those three options already
+ * have for the REST side. */
+export type AdminHubSubAppOptions = Pick<AdminHubAppOptions, 'triggers' | 'templates' | 'dlq'>
 
 /**
  * Every sub-app `defineAdminHubApp` composes alongside itself, in declaration order — always
- * activated together via ONE `activateApps([defineAdminHubApp(...), ...getAdminHubSubApps()])`
- * call (see `start.ts`'s own `startSequence`), so an app sharing a root resource with
+ * activated together via ONE `activateApps([defineAdminHubApp(options), ...
+ * getAdminHubSubApps(options)])` call (see `start.ts`'s own `startSequence`, which passes the SAME
+ * `{ triggers, templates, dlq }` to both), so an app sharing a root resource with
  * `defineAdminHubApp` still resolves to the same instance (the same reason `activateApps` itself
  * takes a list, not one app at a time).
  *
- * Unconditional — like `defineAdminHubApp`'s own former `operations` field, these sub-apps'
- * `operations` are always registered regardless of the `triggers`/`templates` REST options (those
- * only control the REST controllers themselves, never this operations/mcp surface).
+ * Conditional, mirroring `defineAdminHubApp`'s own REST-controller gating exactly — a resource's
+ * `operations`/`mcp` sub-app is composed if and only if its REST controller would be too (`options.
+ * <resource> !== false`). Before this, e.g. `admin-hub-dlq`'s own `operations` stayed composed even
+ * when a caller passed `dlq: false`, a reachable (auth-gated) surface with no REST counterpart —
+ * the exact same asymmetry `local-admin-app.ts`'s own `getLocalAdminSubApps()` had, fixed there
+ * first (see that function's own doc). `options` defaults to `{}` — every field `undefined`, so
+ * every sub-app is composed — matching `defineAdminHubApp()`'s own all-triggers/templates/dlq-on
+ * default; a caller not passing `options` at all keeps today's behavior unchanged.
  *
  * Each sub-app declares no `dependencies`/`resources` of its own (see each factory's own doc), so
  * composing more of them costs nothing extra in resource-resolution complexity — only whatever
  * `bootstrapAppServer` calls `start.ts` adds for their own HTTP dispatch-route reachability.
  */
-export function getAdminHubSubApps(): ZanixAppDefinition[] {
-  return HUB_SUB_APP_FACTORIES.map((define) => define())
+export function getAdminHubSubApps(
+  options: AdminHubSubAppOptions = {},
+): ZanixAppDefinition[] {
+  return HUB_SUB_APP_ENTRIES
+    .filter((entry) => entry.enabled(options))
+    .map((entry) => entry.factory())
 }
 
 /**
@@ -71,6 +104,14 @@ export interface AdminHubAppOptions {
   templates?:
     | false
     | (TemplatesControllerOptions & { application?: AdminStartApplication })
+  /** Options for the DLQ (Dead Letter Queue) route, or `false` to skip registering it entirely —
+   * same shape as {@link triggers}: this route needs no default guards of its own to build (unlike
+   * `templates`, `createDlqController` bakes its own `ADMIN_ROLE`/`ADMIN_DLQ_ROLE`
+   * `AuthTokenValidation` in, the same way `createTriggersController` does), so it's composed
+   * on-by-default here, mirroring `triggers` rather than `templates`' guard-injection shape. */
+  dlq?:
+    | false
+    | (DlqControllerOptions & { application?: AdminStartApplication })
   /** See `StartOptions.auth`'s own doc (`start.ts`) for the full behavior this installs. */
   auth?: ServiceAuthClientOptions
 }
@@ -84,13 +125,13 @@ const registeredControllers: unknown[] = []
 /**
  * One hub-composable admin module's own registration recipe — the contract a THIRD module
  * (GQLIDE, Swagger, ...) would implement to be registered by {@link defineAdminHubMetadata}
- * alongside triggers/templates, without editing that function's own internals. Generalizes what
+ * alongside triggers/templates/dlq, without editing that function's own internals. Generalizes what
  * used to be two hand-duplicated `if (x !== false) { ... }` blocks (one per module) into one data
  * table — adding a module means adding an entry here, never touching the registration loop.
  */
 interface AdminHubModuleEntry<TOptions extends object> {
   /** This module's own options from `AdminHubAppOptions`, or `false` to skip it entirely — same
-   * meaning `AdminHubAppOptions.triggers`/`.templates` already have. */
+   * meaning `AdminHubAppOptions.triggers`/`.templates`/`.dlq` already have. */
   options: false | (TOptions & { application?: AdminStartApplication })
   /** Dynamically imports whichever module defines this controller factory, resolving to a
    * function that SYNCHRONOUSLY builds the controller given `options` (minus `application`) —
@@ -136,9 +177,13 @@ async function registerAdminHubModules(
  * (see `start.ts`), and that any other host can compose directly via `Zanix.start({ apps: {
  * 'admin-hub': defineAdminHubApp(options) } })` without going through `ZanixAdminHub` at all.
  *
+ * Also always registers `GET /registry` (`createRegistryController`) — read-only, reflecting the
+ * same `ServiceRegistry` instance this app installs below, with no `options.registry` toggle to
+ * disable it (see `createRegistryController`'s own doc for why).
+ *
  * A factory, not a pre-built constant, because — unlike a typical Zanix App — which
  * controllers/Application/credentials this one registers is a per-deployment decision
- * (`triggers`/`templates`/`auth`), not fixed at author time; same pattern `@zanix/space`'s own
+ * (`triggers`/`templates`/`dlq`/`auth`), not fixed at author time; same pattern `@zanix/space`'s own
  * `defineSpaceApp()` already establishes for a manifest whose shape depends on caller-supplied
  * options.
  *
@@ -152,19 +197,19 @@ async function registerAdminHubModules(
  * `routes: false` — each controller manages its own `ProgramModule.defineApplication(...)` scope
  * explicitly (below), rather than relying on this app's own auto-prefix mount.
  *
- * Declares no `operations` of its own anymore — the aggregated triggers/templates `operations`/
+ * Declares no `operations` of its own anymore — the aggregated triggers/templates/dlq `operations`/
  * `mcp` view previously declared inline here now lives in its own physically-separate sub-apps
  * (`getAdminHubSubApps`, above), composed alongside this one via ONE `activateApps([...])` call
  * (see `start.ts`'s own `startSequence`) rather than merged into this app's own manifest.
- * `ctx.remote('admin-hub-triggers')`/`ctx.remote('admin-hub-templates')` reach them now, not
- * `ctx.remote('admin-hub')` — a deliberate rename, safe because this operations/mcp surface was
- * only ever exercised by this package's own test suite, never a real external caller (see
- * `admin`'s own CHANGELOG for the full migration note).
+ * `ctx.remote('admin-hub-triggers')`/`ctx.remote('admin-hub-templates')`/`ctx.remote('admin-hub-dlq')`
+ * reach them now, not `ctx.remote('admin-hub')` — a deliberate rename, safe because this
+ * operations/mcp surface was only ever exercised by this package's own test suite, never a real
+ * external caller (see `admin`'s own CHANGELOG for the full migration note).
  */
 export function defineAdminHubApp(
   options: AdminHubAppOptions = {},
 ): ZanixAppDefinition {
-  const { triggers = {}, templates = {}, auth } = options
+  const { triggers = {}, templates = {}, dlq = {}, auth } = options
 
   return defineZanixApp({
     name: ADMIN_HUB_APPLICATION,
@@ -203,6 +248,28 @@ export function defineAdminHubApp(
         ),
       )
 
+      // Same reasoning as `setTriggersAggregator` above, one domain over — always wired regardless
+      // of `auth`, reusing the exact same `registry`/`authHeaders` already resolved for Triggers.
+      setDlqAggregator(
+        new DlqAggregator(
+          registry,
+          authHeaders
+            ? async (service) =>
+              new DlqAdminClient({
+                baseUrl: service.adminBaseUrl,
+                headers: await authHeaders(service),
+              })
+            : undefined,
+          authHeaders
+            ? async (service) =>
+              new DiscoveryAdminClient({
+                baseUrl: service.adminBaseUrl,
+                headers: await authHeaders(service),
+              })
+            : undefined,
+        ),
+      )
+
       if (authHeaders) {
         setTemplatesDiscoveryClientFactory(
           async (service) =>
@@ -213,7 +280,7 @@ export function defineAdminHubApp(
         )
       }
 
-      await defineAdminHubMetadata(triggers, templates)
+      await defineAdminHubMetadata(triggers, templates, dlq)
     },
   })
 }
@@ -227,7 +294,8 @@ export function defineAdminHubApp(
  *   `TemplatesAdminRepository`), the session/auth infra `AuthTokenValidation`/`rateLimitGuard`
  *   need, and the `TemplateProvider` + templates model `TemplatesAdminService` reads through.
  * - Every hub module ({@link AdminHubModuleEntry}) this deployment enabled — today `triggers`/
- *   `templates`, via {@link registerAdminHubModules}. `start.ts`'s own `bootstrapAppServer`/
+ *   `templates`/`dlq`, via {@link registerAdminHubModules}, plus `registry` (always enabled, no
+ *   `false` entry — see `createRegistryController`'s own doc). `start.ts`'s own `bootstrapAppServer`/
  *   `bootstrapServers` calls only ever serve what's registered here.
  */
 async function defineAdminHubMetadata(
@@ -237,6 +305,9 @@ async function defineAdminHubMetadata(
   templates:
     | false
     | (TemplatesControllerOptions & { application?: AdminStartApplication }),
+  dlq:
+    | false
+    | (DlqControllerOptions & { application?: AdminStartApplication }),
 ): Promise<void> {
   const [, , , controllers] = await Promise.all([
     import('@zanix/datamaster/core'),
@@ -249,9 +320,40 @@ async function defineAdminHubMetadata(
           import('./triggers/triggers.handler.ts').then((m) => m.createTriggersController),
       },
       {
-        options: templates,
+        // Same shape as `triggers` above (never `templates`' guard-injection) — `createDlqController`
+        // already bakes its own `ADMIN_ROLE`/`ADMIN_DLQ_ROLE` `AuthTokenValidation` in, so this
+        // deployment option is only ever `false` or route-shaping (`prefix`/`application`).
+        options: dlq,
+        importController: () => import('./dlq/dlq.handler.ts').then((m) => m.createDlqController),
+      },
+      {
+        // `@zanix/notifications/templates-api`'s `createTemplatesController` never assumes an auth
+        // mechanism (see its own doc) — defaults to a real `ADMIN_ROLE`/`ADMIN_TEMPLATES_ROLE` guard
+        // here, so this route is never public by accident. Spreading the caller's own `templates`
+        // LAST lets it override `guards`/`versionProtocol` explicitly (including opting into no
+        // guard at all, via `guards: []`) without losing that safe-by-default posture for anyone
+        // who doesn't.
+        options: templates === false ? false : {
+          guards: [
+            jwtValidationGuard({
+              permissions: [ADMIN_ROLE, ADMIN_TEMPLATES_ROLE],
+              type: ADMIN_AUTH_TYPES,
+            }),
+          ],
+          versionProtocol: ADMIN_VERSION_PROTOCOL,
+          ...templates,
+        },
         importController: () =>
-          import('./templates/templates.handler.ts').then((m) => m.createTemplatesController),
+          import('@zanix/notifications/templates-api').then((m) => m.createTemplatesController),
+      },
+      {
+        // Never `false` — unlike triggers/templates/dlq, `ServiceRegistry` always exists regardless
+        // of which of those three are enabled (see `createRegistryController`'s own doc for why this
+        // resource has no individual opt-out), so this entry's `options` is a fixed `{}` rather than
+        // derived from any `AdminHubAppOptions` field.
+        options: {} as RegistryControllerOptions & { application?: AdminStartApplication },
+        importController: () =>
+          import('./registry/registry.handler.ts').then((m) => m.createRegistryController),
       },
     ]),
   ])

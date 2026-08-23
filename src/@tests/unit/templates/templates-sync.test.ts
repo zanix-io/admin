@@ -1,7 +1,8 @@
 // deno-lint-ignore-file no-explicit-any
-import { assertEquals, assertRejects } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import { stub } from '@std/testing/mock'
 import { HttpError } from '@zanix/errors'
+import logger from '@zanix/logger'
 import { ProgramModule } from '@zanix/server'
 import { ServiceRegistry, setServiceRegistry } from 'modules/registry/registry.ts'
 import { DiscoveryAdminClient } from 'modules/discovery/discovery.client.ts'
@@ -10,6 +11,12 @@ import {
   syncTemplatesFromRegisteredService,
   type TemplatesDiscoveryClientFactory,
 } from 'modules/templates/templates-sync.ts'
+
+// `syncTemplatesFromRegisteredService` now logs (`logger.error`) on a genuine failure (see
+// `templates-sync.ts`'s own doc) — quieted the same way `triggers.aggregator.test.ts`/
+// `dlq.aggregator.test.ts` already do, so an intentionally-triggered failure in a test below
+// doesn't print a real error to the test run's own console.
+console.error = () => {}
 
 /** A `fetch` mock that 404s `.well-known/zanix/templates` and only serves `code-templates` — the
  * common case (target has no DB-backed templates enabled), used by every test below that isn't
@@ -385,6 +392,46 @@ Deno.test({
     } finally {
       fetchStub.restore()
       providersStub.restore()
+    }
+  },
+})
+
+Deno.test({
+  name:
+    'syncTemplatesFromRegisteredService logs (logger.error) and rethrows unchanged a genuine failure',
+  fn: async () => {
+    setServiceRegistry(
+      new ServiceRegistry([{
+        serviceId: 'billing',
+        adminBaseUrl: 'http://billing.internal',
+      }]),
+    )
+    const fetchStub = stub(
+      globalThis,
+      'fetch',
+      (() =>
+        Promise.resolve(
+          new Response('server exploded', { status: 500 }),
+        )) as never,
+    )
+    const providersStub = stubSyncCodeTemplates([])
+    const errorStub = stub(logger, 'error')
+
+    try {
+      await assertRejects(
+        () => syncTemplatesFromRegisteredService('billing', 'admin-1'),
+        HttpError,
+      )
+
+      assertEquals(errorStub.calls.length, 1)
+      assert(errorStub.calls[0].args[1] instanceof HttpError)
+      const message = String(errorStub.calls[0].args[0])
+      assert(message.includes('ADMIN_TEMPLATES_SYNC_FAILED'))
+      assert(message.includes('billing'))
+    } finally {
+      fetchStub.restore()
+      providersStub.restore()
+      errorStub.restore()
     }
   },
 })

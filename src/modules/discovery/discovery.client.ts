@@ -9,7 +9,7 @@ interface DiscoveryEnvelope<T> {
 
 /**
  * Thin HTTP client for a registered service's own `/.well-known/zanix/{resourceType}` Discovery
- * endpoint — see `@zanix/server`'s `docs/APPLICATIONS.md`'s "Discovery" section. Used to fetch a
+ * endpoint — see `@zanix/server`'s `docs/applications.md`'s "Discovery" section. Used to fetch a
  * read-only snapshot from a service this package doesn't own the data for (`TriggersAggregator`'s
  * `list()`, and `syncTemplatesFromRegisteredService`), rather than proxying through that service's
  * authenticated CRUD API for a plain read.
@@ -19,6 +19,11 @@ interface DiscoveryEnvelope<T> {
  * different version. Construct one per target service, pointing `baseUrl` at that service's own
  * admin address and `headers` at whatever credential its Discovery guard accepts (typically the
  * same one its CRUD API already requires).
+ *
+ * `resourceType` is always `encodeURIComponent`-escaped before it's interpolated into the request
+ * path — `RestClient` builds the final URL by plain string concatenation, so an unescaped `/`,
+ * `..`, `?`, or `#` in `resourceType` would otherwise land as extra path segments/query string on
+ * the target service instead of a single opaque path component.
  *
  * @example
  * ```ts
@@ -48,7 +53,7 @@ export class DiscoveryAdminClient extends RestClient {
   /** Fetches the current snapshot for `resourceType`, unwrapped from its envelope. */
   public async snapshot<T>(resourceType: string): Promise<T[]> {
     const envelope = await this.http.get<DiscoveryEnvelope<T>>(
-      `.well-known/zanix/${resourceType}`,
+      `.well-known/zanix/${encodeURIComponent(resourceType)}`,
     )
     return envelope.items
   }

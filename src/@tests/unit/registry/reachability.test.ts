@@ -1,6 +1,6 @@
 import { assert, assertEquals } from '@std/assert'
 import { stub } from '@std/testing/mock'
-import { checkServiceRegistryReachability } from 'modules/registry/reachability.ts'
+import { checkServiceRegistryReachability, realHttpStatus } from 'modules/registry/reachability.ts'
 import { ServiceRegistry } from 'modules/registry/registry.ts'
 
 console.error = () => {}
@@ -102,6 +102,16 @@ Deno.test({
       status: 'unexpected',
     }])
   },
+})
+
+Deno.test('realHttpStatus: undefined for anything that is not a RestClientError', () => {
+  // Every `checkServiceRegistryReachability` test above only ever feeds this a real
+  // `RestClientError` (thrown by `RestClient` itself, since `httpResponse`'s Response always
+  // resolves) — the plain-`Error`/non-`RestClientError` branch (the exact scenario this helper's
+  // own doc calls out as an equally-`undefined` case, for `templates-sync.ts`'s reuse) is only
+  // reachable by calling the exported helper directly.
+  assertEquals(realHttpStatus(new Error('boom')), undefined)
+  assertEquals(realHttpStatus('not an error at all'), undefined)
 })
 
 Deno.test('checkServiceRegistryReachability: never throws when every entry fails', async () => {

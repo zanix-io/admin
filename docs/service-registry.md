@@ -84,6 +84,31 @@ e.g. exit non-zero if any entry isn't `'ok'`.
 
 ---
 
+## `GET /registry` — reading the registry over HTTP
+
+`defineAdminHubApp` always composes a single, read-only `GET /registry` route
+(`createRegistryController`) reflecting whichever `ServiceRegistry` instance is currently installed
+— unlike `/triggers`/`/templates`/`/dlq`, there is no `registry: false` opt-out, since
+`ServiceRegistry` always exists regardless of which of those three are enabled. Guarded by just
+`ADMIN_ROLE` (no dedicated `ADMIN_REGISTRY_ROLE`) — this is core hub info, not an individually
+gateable resource the way triggers/templates/dlq each are.
+
+`RegistryHubClient` is the thin HTTP client for calling this route from OUTSIDE the hub process
+(e.g. an ops UI like `@zanix/console`), the hub-facing counterpart of `TriggersHubClient`/
+`TemplatesHubClient`:
+
+```typescript
+import { RegistryHubClient } from 'jsr:@zanix/admin@[version]'
+
+const client = new RegistryHubClient({
+  baseUrl: 'http://admin-hub.internal:9000',
+  headers: { 'X-Znx-Authorization': `Bearer ${accessToken}` },
+})
+const services = await client.list()
+```
+
+---
+
 ## 🔗 See also
 
 - [Triggers Aggregator](./triggers-aggregator.md) — fans out/proxies against every registered entry.

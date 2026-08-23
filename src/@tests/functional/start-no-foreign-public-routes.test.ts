@@ -29,14 +29,14 @@ Deno.test({
     const servers = await ZanixAdminHub.start()
 
     // The admin Application server, plus one server per hub sub-app (`admin-hub-triggers`/
-    // `admin-hub-templates` — see `admin-hub-app.ts`'s own doc) started — the "public" bootstrap
-    // never ran, since neither triggers nor templates was configured with `application: 'main'`.
-    // `servers[0]` is still the real admin server (`start.ts`'s own return order puts
-    // `adminServers` before the sub-apps'), sharing one port with the other two.
+    // `admin-hub-templates`/`admin-hub-dlq` — see `admin-hub-app.ts`'s own doc) started — the
+    // "public" bootstrap never ran, since none of triggers/templates/dlq was configured with
+    // `application: 'main'`. `servers[0]` is still the real admin server (`start.ts`'s own return
+    // order puts `adminServers` before the sub-apps'), sharing one port with the other three.
     assertEquals(
       servers.length,
-      3,
-      'the admin server and its two sub-app servers should start',
+      4,
+      'the admin server and its three sub-app servers should start',
     )
 
     const info = webServerManager.info(servers[0])

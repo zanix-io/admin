@@ -3,21 +3,37 @@ import type { ZanixAppDefinition } from '@zanix/app'
 import { defineZanixApp } from '@zanix/app'
 import { ADMIN_APPLICATION } from '../utils/constants.ts'
 import { defineAdminMetadata } from './metadata.ts'
+import {
+  isDlqResourceEnabled,
+  isTemplatesResourceEnabled,
+  isTriggersResourceEnabled,
+} from './admin-resource-gates.ts'
 import { defineLocalTriggersApp } from './triggers/local-triggers-app.ts'
 import { defineLocalTemplatesApp } from './templates/local-templates-app.ts'
+import { defineLocalDlqApp } from './dlq/local-dlq-app.ts'
 
 /**
  * Every additional Zanix App `@zanix/core`'s `admin: true` option/a host composing
- * `defineLocalAdminApp` directly should activate ALONGSIDE it — today, Triggers'/Templates' own
- * `operations`/`mcp` surfaces, each physically separated into their own file/app identity
- * (`triggers/local-triggers-app.ts`, `templates/local-templates-app.ts`) rather than declared
- * inline on `defineLocalAdminApp` itself. A future third local sub-app is added here, never by
- * editing `defineLocalAdminApp`'s own body — see `getLocalAdminSubApps`'s own doc for the
- * composition contract.
+ * `defineLocalAdminApp` directly should activate ALONGSIDE it — today, Triggers'/Templates'/DLQ's
+ * own `operations`/`mcp` surfaces, each physically separated into their own file/app identity
+ * (`triggers/local-triggers-app.ts`, `templates/local-templates-app.ts`, `dlq/local-dlq-app.ts`)
+ * rather than declared inline on `defineLocalAdminApp` itself. A future fourth local sub-app is
+ * added here, never by editing `defineLocalAdminApp`'s own body — see `getLocalAdminSubApps`'s own
+ * doc for the composition contract. DLQ has no hub-side counterpart yet — see
+ * `dlq/local-dlq-app.ts`'s own doc for why.
+ *
+ * Each entry's `enabled` predicate is one of {@link isTriggersResourceEnabled}/
+ * {@link isTemplatesResourceEnabled}/{@link isDlqResourceEnabled} (`admin-resource-gates.ts`) — the
+ * exact same functions `defineAdminMetadata` (`metadata.ts`) reads to decide its own REST/Discovery
+ * gating, so a new entry here is never accidentally composed on a different signal than its REST
+ * counterpart.
  */
-const LOCAL_SUB_APP_FACTORIES: Array<() => ZanixAppDefinition> = [
-  defineLocalTriggersApp,
-  defineLocalTemplatesApp,
+const LOCAL_SUB_APP_ENTRIES: Array<
+  { factory: () => ZanixAppDefinition; enabled: () => boolean }
+> = [
+  { factory: defineLocalTriggersApp, enabled: isTriggersResourceEnabled },
+  { factory: defineLocalTemplatesApp, enabled: isTemplatesResourceEnabled },
+  { factory: defineLocalDlqApp, enabled: isDlqResourceEnabled },
 ]
 
 /**
@@ -27,25 +43,33 @@ const LOCAL_SUB_APP_FACTORIES: Array<() => ZanixAppDefinition> = [
  * `defineLocalAdminApp` still resolves to the same instance (the same reason `activateApps` itself
  * takes a list, not one app at a time).
  *
- * Unconditional — like `defineLocalAdminApp`'s own former `operations` field, these sub-apps'
- * `operations` are always registered, independent of `defineAdminMetadata`'s own REST-controller
- * gating (`TRIGGERS_MODEL_NAME`/`DATABASE_TEMPLATES`).
+ * Conditional, mirroring `defineAdminMetadata`'s own REST-controller gating exactly (same env
+ * signals, read via the same {@link isTriggersResourceEnabled}/{@link isTemplatesResourceEnabled}/
+ * {@link isDlqResourceEnabled} functions) — a resource's `operations`/`mcp` sub-app is composed if
+ * and only if its REST controller would be too. Before this, e.g. `admin-dlq`'s own `operations`
+ * stayed composed even in a deployment that never set `DLQ_MODEL_NAME` and therefore never got a
+ * live `/admin/dlq` REST route — a reachable (auth-gated) surface that could only ever fail at call
+ * time, never simply not exist the way its REST counterpart already didn't. Re-evaluated on every
+ * call (not cached), same reasoning as `defineAdminMetadata`'s own re-evaluation.
  *
  * Each sub-app declares no `dependencies`/`resources` of its own (see each factory's own doc), so
  * composing more of them costs nothing extra in resource-resolution complexity.
  */
 export function getLocalAdminSubApps(): ZanixAppDefinition[] {
-  return LOCAL_SUB_APP_FACTORIES.map((define) => define())
+  return LOCAL_SUB_APP_ENTRIES
+    .filter((entry) => entry.enabled())
+    .map((entry) => entry.factory())
 }
 
 /**
  * The embedded, business-service-side admin Zanix App — `@zanix/core`'s own `admin: true` option
  * activates this instead of hand-rolling its own bootstrap/resource wiring. Registers exactly what
  * {@link defineAdminMetadata} already registers (`/admin/triggers`, `/admin/templates`,
- * `/admin/service-token`), unchanged — including each controller's own env-var-driven Application
- * override (`ADMIN_TRIGGERS_APPLICATION`/`ADMIN_TEMPLATES_APPLICATION`): `ProgramModule.
- * defineApplication` is documented as safe to nest, so a controller redirected onto a different
- * Application still registers correctly from inside this app's own `setup`.
+ * `/admin/dlq`, `/admin/service-token`), unchanged — including each controller's own env-var-driven
+ * Application override (`ADMIN_TRIGGERS_APPLICATION`/`ADMIN_TEMPLATES_APPLICATION`/
+ * `ADMIN_DLQ_APPLICATION`): `ProgramModule.defineApplication` is documented as safe to nest, so a
+ * controller redirected onto a different Application still registers correctly from inside this
+ * app's own `setup`.
  *
  * Declares no `operations` of its own anymore — this service's own triggers/templates
  * `operations`/`mcp` view previously declared inline here now lives in its own

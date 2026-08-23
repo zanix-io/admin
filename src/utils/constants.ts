@@ -1,8 +1,8 @@
 /**
- * Grants access to every admin API this package owns (`/admin/triggers`, `/admin/templates`, and
- * any `@zanix/core`-based service exposing the same admin protocol). Combine with
- * {@link ADMIN_TRIGGERS_ROLE}/{@link ADMIN_TEMPLATES_ROLE} when a caller should only reach one of
- * the two APIs.
+ * Grants access to every admin API this package owns (`/admin/triggers`, `/admin/templates`,
+ * `/admin/dlq`, and any `@zanix/core`-based service exposing the same admin protocol). Combine
+ * with {@link ADMIN_TRIGGERS_ROLE}/{@link ADMIN_TEMPLATES_ROLE}/{@link ADMIN_DLQ_ROLE} when a
+ * caller should only reach one of the three APIs.
  *
  * ```ts
  * await authProvider.session.generateTokens(adminUser, { permissions: [ADMIN_ROLE] })
@@ -15,6 +15,9 @@ export const ADMIN_TRIGGERS_ROLE = 'zanix:admin:triggers'
 
 /** Grants access to the templates admin API (`/admin/templates`) only. */
 export const ADMIN_TEMPLATES_ROLE = 'zanix:admin:templates'
+
+/** Grants access to the DLQ (Dead Letter Queue) admin API (`/admin/dlq`) only. */
+export const ADMIN_DLQ_ROLE = 'zanix:admin:dlq'
 
 export { ADMIN_PROTOCOL_SUPPORTED_VERSIONS, ADMIN_PROTOCOL_VERSION } from './protocol/constants.ts'
 
@@ -57,6 +60,12 @@ export const ADMIN_HUB_TRIGGERS_APPLICATION = 'admin-hub-triggers'
  * sub-module (`templates/hub-templates-app.ts`). */
 export const ADMIN_HUB_TEMPLATES_APPLICATION = 'admin-hub-templates'
 
+/** Same reasoning as {@link ADMIN_HUB_TRIGGERS_APPLICATION}, for the hub's DLQ (Dead Letter Queue)
+ * `operations` sub-module (`dlq/hub-dlq-app.ts`) — backed by `DlqAggregator`, the same
+ * `ServiceRegistry`-driven remote fan-out shape {@link ADMIN_HUB_TRIGGERS_APPLICATION} already
+ * establishes for Triggers. */
+export const ADMIN_HUB_DLQ_APPLICATION = 'admin-hub-dlq'
+
 /** Own Zanix App identity for the embedded, business-service-side Triggers `operations`/`mcp`
  * surface ({@link ADMIN_APPLICATION}'s own physically-separate sub-module — see
  * `triggers/local-triggers-app.ts`) — same reasoning as {@link ADMIN_HUB_TRIGGERS_APPLICATION},
@@ -66,6 +75,15 @@ export const ADMIN_TRIGGERS_APPLICATION = 'admin-triggers'
 /** Same reasoning as {@link ADMIN_TRIGGERS_APPLICATION}, for the local Templates `operations`
  * sub-module (`templates/local-templates-app.ts`). */
 export const ADMIN_TEMPLATES_APPLICATION = 'admin-templates'
+
+/**
+ * Own Zanix App identity for the embedded, business-service-side DLQ (Dead Letter Queue)
+ * `operations`/`mcp` surface ({@link ADMIN_APPLICATION}'s own physically-separate sub-module — see
+ * `dlq/local-dlq-app.ts`) — same reasoning as {@link ADMIN_TRIGGERS_APPLICATION}. The hub-side
+ * counterpart is {@link ADMIN_HUB_DLQ_APPLICATION}, backed by `DlqAggregator`/`DlqAdminClient` —
+ * DLQ is now mirrored on both sides, the same shape Triggers/Templates already establish.
+ */
+export const ADMIN_DLQ_APPLICATION = 'admin-dlq'
 
 /**
  * Env var overriding which Application `/admin/triggers` is composed under — defaults to
@@ -82,6 +100,13 @@ export const ADMIN_TRIGGERS_APPLICATION_ENV = 'ADMIN_TRIGGERS_APPLICATION'
  * `createTemplatesController`.
  */
 export const ADMIN_TEMPLATES_APPLICATION_ENV = 'ADMIN_TEMPLATES_APPLICATION'
+
+/**
+ * Env var overriding which Application `/admin/dlq` is composed under — defaults to
+ * {@link ADMIN_APPLICATION} — same caveat as {@link ADMIN_TRIGGERS_APPLICATION_ENV}. See
+ * `createDlqAdminController` (`@zanix/datamaster/dlq-api`).
+ */
+export const ADMIN_DLQ_APPLICATION_ENV = 'ADMIN_DLQ_APPLICATION'
 
 // Accepts either a human admin's user-shaped token or a machine caller's api-shaped one — a
 // registered service's own aggregator/sync orchestration  authenticates as `type: 'api'`,

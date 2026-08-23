@@ -15,8 +15,8 @@
  *
  * This is a **library**, not a single deployable app — any team stands up its own admin service by
  * importing this package, either via {@link ZanixAdminHub}'s reference `start()`/`stop()` (the
- * quickest path) or by wiring `createTriggersController()`/`createTemplatesController()` into its
- * own `@zanix/server`/`@zanix/core`-based bootstrap directly. See the README for both.
+ * quickest path) or by wiring `createTriggersController()`/`createTemplatesSyncController()` into
+ * its own `@zanix/server`/`@zanix/core`-based bootstrap directly. See the README for both.
  */
 
 import { start, stop } from 'modules/start.ts'
@@ -36,6 +36,8 @@ export type { DiscoveryProvider } from '@zanix/server'
 
 export {
   ADMIN_APPLICATION,
+  ADMIN_DLQ_APPLICATION_ENV,
+  ADMIN_DLQ_ROLE,
   ADMIN_HUB_APPLICATION,
   ADMIN_PROTOCOL_SUPPORTED_VERSIONS,
   ADMIN_PROTOCOL_VERSION,
@@ -48,9 +50,10 @@ export {
 
 /**
  * Registers this package's business-service-side admin controllers (`/admin/triggers`,
- * `/admin/templates`, `/admin/service-token`) — the counterpart a central `zanix-admin` deployment
- * calls *into*. Called by `@zanix/core`'s own `start()`; see this symbol's own doc for the full
- * per-controller composition behavior and the two `*_APPLICATION` env var overrides.
+ * `/admin/templates`, `/admin/dlq`, `/admin/service-token`) — the counterpart a central
+ * `zanix-admin` deployment calls *into*. Called by `@zanix/core`'s own `start()`; see this symbol's
+ * own doc for the full per-controller composition behavior and the three `*_APPLICATION` env var
+ * overrides.
  */
 export { defineAdminMetadata } from 'modules/metadata.ts'
 /**
@@ -62,6 +65,7 @@ export { defineAdminMetadata } from 'modules/metadata.ts'
  */
 export {
   type AdminHubAppOptions,
+  type AdminHubSubAppOptions,
   type AdminStartApplication,
   defineAdminHubApp,
   getAdminHubSubApps,
@@ -85,56 +89,51 @@ export { createTemplatesDiscoveryGuard } from 'modules/metadata.ts'
 export { ADMIN_PROTOCOL_HEADER } from '@zanix/server'
 
 /**
- * Base CRUD layer behind `zanix-admin`'s own `/templates` API (and, via `@zanix/core`'s own
- * re-export, its built-in `/admin/templates`) — backs `createTemplatesController`. Re-exported
- * from `@zanix/notifications` (not defined here) — that package owns the templates schema/
- * collection and authors this CRUD/business logic directly; this package only composes it into an
- * HTTP surface, the same role it already plays for `TriggersAdminRepository`/`Service`. Exported
- * here too so a consuming app can extend or reuse them to build its own custom templates API
- * without depending on `@zanix/notifications` directly. See its own `docs/templates.md` for the
- * storage model this operates under.
+ * Data access and business logic for this package's own templates collection — see
+ * `@zanix/notifications`'s own `docs/templates.md` for the storage model this operates under.
  */
 export { TemplatesAdminRepository, TemplatesAdminService } from '@zanix/notifications'
 /** Re-exported so `syncTemplatesFromRegisteredService`'s own return type is nameable. */
 export type { SyncCodeTemplatesResult } from '@zanix/notifications'
 /**
- * Request DTOs backing `zanix-admin`'s own `/templates` API (and, via `@zanix/core`'s own
- * re-export, its built-in `/admin/templates`) — exported alongside `TemplatesAdminRepository`/
- * `Service` so any consumer building a wire-compatible templates controller reuses this validation
- * contract instead of redefining it.
+ * `POST /templates/sync` request DTO — see `createTemplatesSyncController`'s own doc.
  */
-export {
-  CreateTemplateRTO,
-  TemplateParamsRTO,
-  UpdateTemplateRTO,
-} from 'modules/templates/rtos/templates.rto.ts'
+export { SyncTemplatesRTO } from 'modules/templates/rtos/templates.rto.ts'
 /**
  * `create`/`update` request DTOs backing both this package's own `/triggers` proxy and, via
  * `@zanix/core`'s own re-export, its built-in `/admin/triggers` — the same wire shape either way,
  * since a proxying request forwards this body to the target service's own admin API unchanged.
  */
 export { CreateTriggerRTO, UpdateTriggerRTO } from 'modules/triggers/rtos/triggers.rto.ts'
+/**
+ * Route params RTOs backing `createTriggersController`'s `/triggers/:serviceId[/:model]` routes —
+ * re-exported so those routes' own return types stay nameable in the generated docs.
+ */
+export type {
+  TriggerServiceModelParamsRTO,
+  TriggerServiceParamsRTO,
+} from 'modules/triggers/rtos/triggers.rto.ts'
+/**
+ * `push`/`requeue`/`discard` request DTOs backing both this package's own `/dlq` proxy and
+ * `@zanix/datamaster`'s own built-in `/admin/dlq` — the same wire shape either way, same reasoning
+ * as `CreateTriggerRTO`/`UpdateTriggerRTO` above.
+ */
+export {
+  DiscardDLQEntryRTO,
+  PushDLQEntryRTO,
+  RequeueDLQEntryRTO,
+} from 'modules/dlq/rtos/dlq.rto.ts'
+/**
+ * Route params RTOs backing `createDlqController`'s `/dlq/:serviceId[/:id]` routes — re-exported so
+ * those routes' own return types stay nameable in the generated docs.
+ */
+export type { DlqServiceEntryParamsRTO, DlqServiceParamsRTO } from 'modules/dlq/rtos/dlq.rto.ts'
 
 /**
  * Data access and business logic for a business service's own persisted local triggers collection
- * (`zanix-triggers`) — backs `createTriggersAdminController`'s `/admin/triggers`, distinct from
- * this package's own `/triggers` proxy/aggregator. Re-exported from `@zanix/datamaster` (not
- * defined here) — that package owns the underlying collection and now authors this CRUD/business
- * logic directly; this package only composes it into an HTTP surface, the same role it already
- * plays for `ADMIN_PROTOCOL_HEADER`. Exported here too so a consuming app can extend or reuse them
- * to build its own custom triggers API without depending on `@zanix/datamaster` directly.
+ * (`zanix-triggers`), distinct from this package's own `/triggers` proxy/aggregator.
  */
 export { TriggersAdminRepository, TriggersAdminService } from '@zanix/database'
-/** Route params RTO for `createTriggersAdminController`'s local `/admin/triggers/:model`. */
-export { TriggerModelParamsRTO } from 'modules/triggers/rtos/local-triggers.rto.ts'
-/**
- * Builds the admin CRUD controller for a business service's own local `/admin/triggers` — see its
- * own JSDoc for how this differs from `createTriggersController` above. Prefix fixed at
- * `admin/triggers` (the wire-protocol contract `TriggersAdminClient` hardcodes); which Application
- * this route belongs to is decided by whichever `defineApplication(...)` scope is active when the
- * caller invokes this factory, not by an option here.
- */
-export { createTriggersAdminController } from 'modules/triggers/local-triggers.handler.ts'
 
 /** Body RTO for `/admin/service-token` — see `createServiceExchangeController`. */
 export { ServiceExchangeRTO } from 'modules/service-exchange/service-exchange.rto.ts'
@@ -151,22 +150,40 @@ export {
 } from 'modules/service-exchange/service-exchange.handler.ts'
 
 /**
- * Thin HTTP clients for calling a business service's own `/admin/triggers`/`/admin/templates` API
- * remotely — the client-side counterpart of this package owning the admin-protocol contract (see
- * this README's "Admin APIs" section). `TriggersAggregator` uses `TriggersAdminClient` internally;
- * both are exported so any other caller reuses this single implementation of the request/response
- * contract instead of a hand-rolled client that can drift from what the controllers actually
- * accept.
+ * Thin HTTP clients for calling a business service's own `/admin/triggers`/`/admin/templates`/
+ * `/admin/dlq` API remotely — the client-side counterpart of this package owning the
+ * admin-protocol contract (see this README's "Admin APIs" section). `TriggersAggregator`/
+ * `DlqAggregator` use `TriggersAdminClient`/`DlqAdminClient` internally; all are exported so any
+ * other caller reuses this single implementation of the request/response contract instead of a
+ * hand-rolled client that can drift from what the controllers actually accept.
  */
 export { TriggersAdminClient } from 'modules/triggers/triggers.client.ts'
 export { TemplatesAdminClient } from 'modules/templates/templates.client.ts'
+export { DlqAdminClient } from 'modules/dlq/dlq.client.ts'
+/** Query params `DlqAdminClient.list()` accepts — re-exported so that method's own signature stays
+ * nameable in the generated docs. */
+export type { DlqListQuery } from 'modules/dlq/dlq.client.ts'
 /**
  * Thin HTTP client for a registered service's own `/.well-known/zanix/{resourceType}` Discovery
- * endpoint — see `@zanix/server`'s `docs/APPLICATIONS.md`'s "Discovery" section.
+ * endpoint — see `@zanix/server`'s `docs/applications.md`'s "Discovery" section.
  * `TriggersAggregator.list()`/`syncTemplatesFromRegisteredService` both use this internally;
  * exported for the same reuse reason as `TriggersAdminClient`/`TemplatesAdminClient`.
  */
 export { DiscoveryAdminClient } from 'modules/discovery/discovery.client.ts'
+
+/**
+ * Thin HTTP clients for calling `zanix-admin`'s OWN hub-side `/triggers`/`/templates`/`/registry`
+ * routes remotely — the hub-facing counterpart of the service-facing clients just above. **Don't
+ * confuse the two levels**: `TriggersAdminClient`/`TemplatesAdminClient`/`DlqAdminClient` each call a
+ * business SERVICE's own local `/admin/<x>` API; `TriggersHubClient`/`TemplatesHubClient`/
+ * `RegistryHubClient` each call `zanix-admin`'s own central hub deployment instead (e.g.
+ * `@zanix/console`, an external ops UI, is the intended caller — not this package's own aggregators,
+ * which already talk to the hub in-process). `TemplatesHubClient` is CRUD-only — the hub never
+ * composes `POST /templates/sync` (see that client's own doc for why).
+ */
+export { TriggersHubClient } from 'modules/triggers/triggers-hub.client.ts'
+export { TemplatesHubClient } from 'modules/templates/templates-hub.client.ts'
+export { RegistryHubClient } from 'modules/registry/registry-hub.client.ts'
 
 export {
   type AggregatedTrigger,
@@ -176,6 +193,14 @@ export {
   type TriggersClientFactory,
   type TriggersDiscoveryClientFactory,
 } from 'modules/triggers/triggers.aggregator.ts'
+export {
+  type AggregatedDlqEntry,
+  DlqAggregator,
+  type DlqClientFactory,
+  type DlqDiscoveryClientFactory,
+  getDlqAggregator,
+  setDlqAggregator,
+} from 'modules/dlq/dlq.aggregator.ts'
 
 /**
  * Builds `zanix-admin`'s triggers API — a proxy/aggregator over every registered service's own
@@ -190,27 +215,47 @@ export {
   type TriggersControllerInstance,
   type TriggersControllerOptions,
 } from 'modules/triggers/triggers.handler.ts'
-
 /**
- * Builds `zanix-admin`'s own templates API — the actual owner of the templates collection, unlike
- * triggers (a proxy). Requires a database connector to be configured (`MONGO_URI`,
- * `TEMPLATES_MODEL_NAME`/`DATABASE_TEMPLATES`, etc.), same as any `@zanix/core`-based service with
- * DB-backed templates — {@link ZanixAdminHub.start} wires this automatically. See
- * `TemplatesControllerOptions` to change the route prefix; which Application this route belongs to
- * is decided by whichever `defineApplication(...)` scope is active when the caller invokes this
- * factory.
+ * Builds `zanix-admin`'s DLQ (Dead Letter Queue) API — a proxy/aggregator over every registered
+ * service's own `/admin/dlq`, never an owner of any DLQ data itself. Same shape as
+ * `createTriggersController`, one domain over — see `setDlqAggregator`/`getDlqAggregator`.
  */
 export {
-  createTemplatesController,
-  type TemplatesControllerInstance,
-  type TemplatesControllerOptions,
-} from 'modules/templates/templates.handler.ts'
+  createDlqController,
+  type DlqControllerInstance,
+  type DlqControllerOptions,
+} from 'modules/dlq/dlq.handler.ts'
+/**
+ * Builds `zanix-admin`'s Service Registry read API (`GET /registry`) — a single read-only route
+ * reflecting whichever `ServiceRegistry` `setServiceRegistry`/{@link getServiceRegistry} resolves.
+ * Always composed by `defineAdminHubApp` (no `false` opt-out) — see its own doc for why.
+ */
+export {
+  createRegistryController,
+  type RegistryControllerInstance,
+  type RegistryControllerOptions,
+} from 'modules/registry/registry.handler.ts'
+
+/**
+ * Builds `zanix-admin`'s own cross-service extension to the templates resource (`POST
+ * /templates/sync`) — a batch, upsert-aware endpoint that pulls a registered service's current
+ * template set via its own Discovery endpoint, given just its `serviceId`. Meant to be mounted
+ * alongside `@zanix/notifications`'s own templates CRUD controller
+ * (`@zanix/notifications/templates-api`), under the same route prefix, composing into ONE apparent
+ * `/templates` resource from an external caller's point of view. See
+ * `TemplatesSyncControllerOptions` to change the route prefix.
+ */
+export {
+  createTemplatesSyncController,
+  type TemplatesSyncControllerInstance,
+  type TemplatesSyncControllerOptions,
+} from 'modules/templates/templates-sync.handler.ts'
 
 /**
  * Pulls a registered service's current code-defined template set from its own
  * `/.well-known/zanix/code-templates` Discovery snapshot, then merges it into this service's own
  * templates collection — the pull-side orchestration behind `POST /templates/sync` (see
- * `createTemplatesController`'s own doc). Cross-service orchestration, not data access — the
+ * `createTemplatesSyncController`'s own doc). Cross-service orchestration, not data access — the
  * actual merge logic lives in `@zanix/notifications`'s `TemplatesAdminRepository.syncCodeTemplates`,
  * which this only calls into.
  */

@@ -1,29 +1,34 @@
 # 📝 Templates API
 
-`TemplatesController` is `zanix-admin`'s templates CRUD API (`/templates`) — this package composes
-it from `@zanix/notifications`'s own `TemplatesAdminRepository`/`TemplatesAdminService` (the actual
-owner of the templates schema/collection), plus this package's own RTOs (validation contract) and
-`versionProtocol` (protocol negotiation). Same shape as triggers: `zanix-admin` wires the HTTP
-surface, the data owner authors the CRUD logic. `@zanix/core`'s own built-in `/admin/templates`
-re-exports these exact same symbols rather than redefining them, so the wire shape is identical
-either way.
+The templates API (`/templates`) is actually TWO separate controllers composed under the same route
+prefix: the CRUD half (`GET`/`POST`/`PUT`/`DELETE`) is authored and owned end-to-end by
+`@zanix/notifications` (`@zanix/notifications/templates-api`'s `createTemplatesController` —
+schema/collection, RTOs, and the HTTP surface itself), the same "local API lives with its domain"
+shape `@zanix/datamaster` establishes for triggers; `zanix-admin` supplies the auth guard/protocol
+config at composition time (the controller itself never assumes an auth mechanism — see its own
+doc). The `sync` extension below, by contrast, IS genuinely authored by this package
+(`createTemplatesSyncController`), since it needs `ServiceRegistry`/cross-service Discovery, a
+concept `@zanix/notifications` deliberately doesn't know about. `@zanix/core`'s own built-in
+`/admin/templates` composes the exact same pair, so the wire shape is identical either way.
 
 ```typescript
 import ZanixAdminHub from 'jsr:@zanix/admin@[version]'
 
-// Requires a database connector to be configured (MONGO_URI, TEMPLATES_MODEL_NAME, etc.), same as
-// any @zanix/core-based service with DB-backed templates.
+// Requires a database connector to be configured (MONGO_URI, TEMPLATES_BACKEND=local, plus
+// TEMPLATES_MODEL_NAME if overriding the default collection name), same as any @zanix/core-based
+// service with DB-backed templates — a bare TEMPLATES_MODEL_NAME with no TEMPLATES_BACKEND=local has
+// no effect (see `defineAdminMetadata`'s own doc).
 await ZanixAdminHub.start()
 ```
 
 Requires `ADMIN_ROLE`/`ADMIN_TEMPLATES_ROLE` (both defined in this package, and re-exported from
 `@zanix/core` for a business service's own use), and accepts either a human admin's `type: 'user'`
 token or a machine caller's `type: 'api'` one — same as `@zanix/core`'s own admin APIs. Bound to the
-`'admin'` Application, anchored (id-prefixed) whenever `ADMIN_SERVER_ID` is set — there is no
-auto-generated anchored id — (see `createTemplatesController`/`ZanixAdminHub.start`'s own
-`templates` option to change the route prefix, or `templates: { application: 'main' }` to mount it
-on the default Application's unprefixed server instead). `AuthTokenValidation` and the role gate
-remain the load-bearing protection either way.
+`'admin-hub'` Application by default, anchored (id-prefixed) whenever `ADMIN_HUB_SERVER_ID` is set —
+there is no auto-generated anchored id — (see `ZanixAdminHub.start`'s own `templates` option to
+change the route prefix, or `templates: { application: 'main' }` to mount it on the default
+Application's unprefixed server instead). The guard built at composition time is the load-bearing
+protection either way.
 
 ---
 
@@ -80,6 +85,29 @@ importing `TemplatesAdminClient` from `@zanix/notifications` would be circular (
 already depends on `@zanix/notifications` for `ZanixTemplateAttrs`/`Notifiers`). Either way, the
 central service must have `RemoteTemplateBackend`'s own `serviceId` registered in its
 `ServiceRegistry` first, mapped to a base URL reachable for that service's own Discovery endpoint.
+
+---
+
+## `TemplatesHubClient` — calling `/templates` from outside the hub
+
+`TemplatesHubClient` is the thin HTTP client for calling this hub's own `/templates` CRUD routes
+from OUTSIDE the hub process (e.g. an ops UI like `@zanix/console`) — don't confuse it with
+`TemplatesAdminClient`, which calls a business SERVICE's own local `/admin/templates` instead:
+
+```typescript
+import { TemplatesHubClient } from 'jsr:@zanix/admin@[version]'
+
+const client = new TemplatesHubClient({
+  baseUrl: 'http://admin-hub.internal:9000',
+  headers: { 'X-Znx-Authorization': `Bearer ${accessToken}` },
+})
+const templates = await client.list()
+```
+
+**CRUD only — no `sync()`.** `POST /templates/sync` is composed only on the LOCAL,
+business-service-side `/admin/templates` prefix (`defineAdminMetadata`), not on this hub-side
+`/templates` prefix — `defineAdminHubApp` only ever wires the CRUD half for the hub. A future change
+wiring `sync` onto the hub too would add a matching method to this client then, not before.
 
 ---
 

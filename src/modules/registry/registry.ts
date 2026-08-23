@@ -46,6 +46,8 @@ export class ServiceRegistry {
     const entry = this.#entries.get(serviceId)
 
     if (!entry) {
+      // No `cause` here, unlike `readFromEnv`'s own throw below — this is a lookup miss against
+      // `#entries`, not a caught exception, so there's no underlying error to attach.
       throw new InternalError(
         `No registered service found for "${serviceId}".`,
         {

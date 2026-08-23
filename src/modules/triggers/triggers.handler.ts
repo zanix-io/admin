@@ -61,7 +61,7 @@ export interface TriggersControllerInstance extends ZanixController {
  * A factory rather than a plain class because `@Controller`'s `prefix` is decorator-time (static)
  * config — `ZanixAdminHub.start()` calls this once at boot with whatever `options.triggers` it was
  * given (see its own docs); an app wiring this manually can call it directly instead. Which
- * Application (see `@zanix/server`'s `docs/APPLICATIONS.md`) this route
+ * Application (see `@zanix/server`'s `docs/applications.md`) this route
  * belongs to is decided by whichever `defineApplication(...)` scope is active when this call runs,
  * not by an option here — see `ZanixAdminHub.start()`'s own docs (`triggers.application`) for how
  * that's controlled. Unlike `createTriggersAdminController` (a business service's own local triggers,

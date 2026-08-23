@@ -11,7 +11,8 @@ import { TemplatesAdminService } from '@zanix/notifications'
 
 /**
  * `TemplatesAdminService`'s mutating methods take an `updatedBy` audit-trail identity — normally
- * the caller's own HTTP session id (`ctx.session?.id`, see `templates.handler.ts`). An operation's
+ * the caller's own HTTP session id (`ctx.session?.id`, see `@zanix/notifications/templates-api`'s
+ * `templates.handler.ts`). An operation's
  * own `ctx` (`RuntimeContext`) never carries a user session (app-to-app, not user-scoped — see
  * `OperationDeclaration`'s own doc), so there is no equivalent identity to forward here. A fixed
  * sentinel distinguishes an operation-triggered change from an HTTP one in the same audit trail,
@@ -26,7 +27,8 @@ const OPERATION_UPDATED_BY = 'zanix-operation'
  * persisted data on the local side — genuinely different business logic per side), Templates is
  * owned DIRECTLY by {@link TemplatesAdminService} in both deployments (the hub's own `/templates`
  * and a business service's own `/admin/templates` both call the exact same class — see
- * `templates.handler.ts`'s own doc) — so the operations built here are structurally identical
+ * `@zanix/notifications/templates-api`'s `templates.handler.ts`'s own doc) — so the operations
+ * built here are structurally identical
  * either way, differing only in which Application (`appName`) they resolve `TemplatesAdminService`
  * against via `resolveTarget`.
  *

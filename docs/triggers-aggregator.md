@@ -13,7 +13,7 @@ fan-out/proxy logic:
 
 `list()` reads from Discovery rather than the CRUD API's own `/admin/triggers/list` — a read-only
 operation goes through the read-only protocol; every other method mutates or targets a single entry,
-so it stays on the CRUD API. See `@zanix/server`'s `docs/APPLICATIONS.md`'s "Discovery" section.
+so it stays on the CRUD API. See `@zanix/server`'s `docs/applications.md`'s "Discovery" section.
 
 **Authentication is a pluggable seam.** The aggregator's constructor takes two independent
 factories: `clientFactory` decides how each per-service `TriggersAdminClient` (CRUD) is built, and
@@ -76,7 +76,7 @@ const authHeaders = async (
     service.serviceId,
     // Always `/admin/service-token` — `createServiceExchangeController`'s own fixed prefix,
     // regardless of the target service's own `server.rest.globalPrefix` (a completely separate
-    // Application/server from its embedded admin one — see `docs/APPLICATIONS.md`).
+    // Application/server from its embedded admin one — see `docs/applications.md`).
     `${service.adminBaseUrl}/admin/service-token`,
   )}`,
 })
@@ -141,32 +141,58 @@ Requires `ADMIN_ROLE`/`ADMIN_TRIGGERS_ROLE` (both defined in this package, and r
 token or a machine caller's `type: 'api'` one — same auth model as
 [`TemplatesController`](./templates-api.md).
 
+**`TriggersHubClient`** is the thin HTTP client for calling this `/triggers` route from OUTSIDE the
+hub process (e.g. an ops UI like `@zanix/console`) — don't confuse it with `TriggersAdminClient`
+above, which calls a business SERVICE's own local `/admin/triggers` instead:
+
+```typescript
+import { TriggersHubClient } from 'jsr:@zanix/admin@[version]'
+
+const client = new TriggersHubClient({
+  baseUrl: 'http://admin-hub.internal:9000',
+  headers: { 'X-Znx-Authorization': `Bearer ${accessToken}` },
+})
+const all = await client.list() // fanned out across every registered service, tagged by serviceId
+```
+
 ---
 
 ## `createTriggersAdminController` — a business service's own local `/admin/triggers`
 
+Owned and authored by `@zanix/datamaster` (`@zanix/datamaster/triggers-api`) — the actual owner of
+the `zanix-triggers` collection also owns the local HTTP surface fronting it, per this ecosystem's
+"local API vs aggregator API" rule (see the `zanix-local-api-vs-aggregator` skill).
+
 Don't confuse this with `createTriggersController`/`TriggersAggregator` above — it's the other side
 of the same wire protocol. `createTriggersAdminController` builds the CRUD controller a **business
 service itself** exposes at a fixed `admin/triggers` prefix, backed directly by
-`TriggersAdminService`/`TriggersAdminRepository` (both re-exported from `@zanix/database`, the
-actual owner of the `zanix-triggers` collection — exported here too so a consuming app can extend or
-reuse them without depending on `@zanix/database` directly). This is the target
-`TriggersAggregator`'s `TriggersAdminClient` calls into on the other end of the wire — this
-controller owns real persisted data, `TriggersAggregator` never does.
+`TriggersAdminService`/`TriggersAdminRepository`. This is the target `TriggersAggregator`'s
+`TriggersAdminClient` calls into on the other end of the wire — this controller owns real persisted
+data, `TriggersAggregator` never does.
+
+`@zanix/datamaster` never assumes an auth mechanism itself (it doesn't depend on `@zanix/auth`) —
+the controller factory accepts `guards`/`versionProtocol` as options instead, supplied by whichever
+package composes it:
 
 ```typescript
-import { createTriggersAdminController } from 'jsr:@zanix/admin@[version]'
+import { createTriggersAdminController } from 'jsr:@zanix/datamaster@[version]/triggers-api'
+import { jwtValidationGuard } from 'jsr:@zanix/auth@[version]'
 
 // Registers /admin/triggers under whichever Application scope is active when this runs — see
 // `@zanix/core`'s own `admin: true` option, which calls this automatically as part of
-// `defineAdminMetadata()`.
-createTriggersAdminController()
+// `@zanix/admin`'s `defineAdminMetadata()`.
+createTriggersAdminController({
+  guards: [
+    jwtValidationGuard({ permissions: [ADMIN_ROLE, ADMIN_TRIGGERS_ROLE], type: ['user', 'api'] }),
+  ],
+})
 ```
 
-Requires the same `ADMIN_ROLE`/`ADMIN_TRIGGERS_ROLE` gate and `type: 'user'`/`type: 'api'` token
-acceptance as `TriggersController` above — only the underlying business logic differs (real CRUD vs.
-proxy). Registered under the `'admin'` Application by default; `ADMIN_TRIGGERS_APPLICATION`
-overrides which Application it's composed under instead (e.g. `'main'`).
+`@zanix/admin`'s own `defineAdminMetadata()` builds this exact guard — the same `ADMIN_ROLE`/
+`ADMIN_TRIGGERS_ROLE` gate and `type: 'user'`/`type: 'api'` token acceptance as `TriggersController`
+above — only the underlying business logic differs (real CRUD vs. proxy). Registered under the
+`'admin'` Application by default; `ADMIN_TRIGGERS_APPLICATION` overrides which Application it's
+composed under instead (e.g. `'main'`).
 
 ---
 

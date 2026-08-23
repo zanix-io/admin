@@ -2,6 +2,7 @@ import type { CreateTriggerInput, TriggersModelAttrs, UpdateTriggerInput } from 
 import type { ServiceRegistryEntry } from 'typings/registry.ts'
 import type { ServiceRegistry } from 'modules/registry/registry.ts'
 
+import logger from '@zanix/logger'
 import { TriggersAdminClient } from './triggers.client.ts'
 import { DiscoveryAdminClient } from 'modules/discovery/discovery.client.ts'
 import { getServiceRegistry } from 'modules/registry/registry.ts'
@@ -44,7 +45,7 @@ const defaultDiscoveryClientFactory: TriggersDiscoveryClientFactory = (
  * `zanix-triggers` collection: `list()` fans out to every registered service's own
  * `/.well-known/zanix/triggers` Discovery snapshot and merges the results tagged by origin
  * service (a plain read, so it goes through Discovery rather than the CRUD API — see
- * `@zanix/server`'s `docs/APPLICATIONS.md`'s "Discovery" section); every other operation resolves
+ * `@zanix/server`'s `docs/applications.md`'s "Discovery" section); every other operation resolves
  * which service owns the given `model` (via the caller-supplied `serviceId`) and proxies straight
  * to that service's own `/admin/triggers` CRUD API — this class never touches another service's
  * database directly.
@@ -83,12 +84,24 @@ export class TriggersAggregator {
     const services = this.#registry.list()
 
     const perService = await Promise.all(services.map(async (service) => {
-      const client = await this.#createDiscoveryClient(service)
-      const triggers = await client.snapshot<TriggersModelAttrs>('triggers')
-      return triggers.map((trigger) => ({
-        ...trigger,
-        serviceId: service.serviceId,
-      }))
+      try {
+        const client = await this.#createDiscoveryClient(service)
+        const triggers = await client.snapshot<TriggersModelAttrs>('triggers')
+        return triggers.map((trigger) => ({
+          ...trigger,
+          serviceId: service.serviceId,
+        }))
+      } catch (error) {
+        // Logged (not swallowed) — see this class's own doc: a single service failing here fails
+        // the whole `Promise.all` fan-out, so this is the only chance to record WHICH service was
+        // the culprit before the aggregate rejection loses that detail.
+        logger.error(
+          `[ADMIN_TRIGGERS_DISCOVERY_FAILED] Failed to fetch the triggers Discovery snapshot from ` +
+            `registered service "${service.serviceId}" (${service.adminBaseUrl}).`,
+          error,
+        )
+        throw error
+      }
     }))
 
     return perService.flat()
@@ -100,8 +113,17 @@ export class TriggersAggregator {
     model: string,
   ): Promise<TriggersModelAttrs> {
     const service = this.#registry.get(serviceId)
-    const client = await this.#createClient(service)
-    return client.get(model)
+    try {
+      const client = await this.#createClient(service)
+      return await client.get(model)
+    } catch (error) {
+      logger.error(
+        `[ADMIN_TRIGGERS_PROXY_FAILED] Failed to get trigger "${model}" from registered service ` +
+          `"${serviceId}" (${service.adminBaseUrl}).`,
+        error,
+      )
+      throw error
+    }
   }
 
   /** Creates a trigger entry on the given service. */
@@ -110,8 +132,17 @@ export class TriggersAggregator {
     input: CreateTriggerInput,
   ): Promise<TriggersModelAttrs> {
     const service = this.#registry.get(serviceId)
-    const client = await this.#createClient(service)
-    return client.create(input)
+    try {
+      const client = await this.#createClient(service)
+      return await client.create(input)
+    } catch (error) {
+      logger.error(
+        `[ADMIN_TRIGGERS_PROXY_FAILED] Failed to create trigger "${input.model}" on registered ` +
+          `service "${serviceId}" (${service.adminBaseUrl}).`,
+        error,
+      )
+      throw error
+    }
   }
 
   /** Updates a trigger entry on the given service. */
@@ -121,15 +152,33 @@ export class TriggersAggregator {
     changes: UpdateTriggerInput,
   ): Promise<TriggersModelAttrs> {
     const service = this.#registry.get(serviceId)
-    const client = await this.#createClient(service)
-    return client.update(model, changes)
+    try {
+      const client = await this.#createClient(service)
+      return await client.update(model, changes)
+    } catch (error) {
+      logger.error(
+        `[ADMIN_TRIGGERS_PROXY_FAILED] Failed to update trigger "${model}" on registered service ` +
+          `"${serviceId}" (${service.adminBaseUrl}).`,
+        error,
+      )
+      throw error
+    }
   }
 
   /** Deletes a trigger entry on the given service. */
   public async remove(serviceId: string, model: string): Promise<void> {
     const service = this.#registry.get(serviceId)
-    const client = await this.#createClient(service)
-    return client.remove(model)
+    try {
+      const client = await this.#createClient(service)
+      await client.remove(model)
+    } catch (error) {
+      logger.error(
+        `[ADMIN_TRIGGERS_PROXY_FAILED] Failed to remove trigger "${model}" from registered service ` +
+          `"${serviceId}" (${service.adminBaseUrl}).`,
+        error,
+      )
+      throw error
+    }
   }
 }
 

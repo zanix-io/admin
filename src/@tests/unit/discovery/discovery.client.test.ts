@@ -49,3 +49,19 @@ Deno.test('DiscoveryAdminClient.snapshot GETs the endpoint, unwraps items', asyn
   assertEquals(opts.method, 'GET')
   assertEquals(opts.headers['X-Znx-Discovery-Protocol'], '1')
 })
+
+Deno.test(
+  'DiscoveryAdminClient.snapshot encodes a resourceType containing a path separator',
+  async () => {
+    const mockFetch = spy((_url: string, _opts: any) =>
+      jsonResponse({ resourceType: 'x', generatedAt: '2026-01-01T00:00:00.000Z', items: [] })
+    )
+    globalThis.fetch = mockFetch as unknown as typeof fetch
+
+    const client = new DiscoveryAdminClient({ baseUrl: 'http://svc.internal:1234' })
+    await client.snapshot('../admin/other')
+
+    const [url] = mockFetch.calls[0].args as [string, any]
+    assertEquals(url, 'http://svc.internal:1234/.well-known/zanix/..%2Fadmin%2Fother')
+  },
+)

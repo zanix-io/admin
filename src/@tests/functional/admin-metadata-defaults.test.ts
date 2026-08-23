@@ -17,7 +17,7 @@ Deno.test({
   sanitizeOps: false,
   sanitizeResources: false,
   name:
-    'defineAdminMetadata() default env: registers /admin/triggers + its Discovery, skips /admin/templates',
+    'defineAdminMetadata() default env: registers /admin/triggers + its Discovery, skips /admin/templates and /admin/dlq',
   fn: async () => {
     await defineAdminMetadata()
 
@@ -50,6 +50,16 @@ Deno.test({
     )
     assertEquals(templatesDiscovery.status, 404)
     await templatesDiscovery.body?.cancel()
+
+    // `DLQ_MODEL_NAME` unset by default — the DLQ branch is never entered either, same opt-in
+    // shape as templates (see `defineAdminMetadata`'s own doc for why DLQ isn't on-by-default).
+    const dlq = await fetch(`${baseUrl}/admin/dlq/list`)
+    assertEquals(dlq.status, 404)
+    await dlq.body?.cancel()
+
+    const dlqDiscovery = await fetch(`${baseUrl}/.well-known/zanix/dlq`)
+    assertEquals(dlqDiscovery.status, 404)
+    await dlqDiscovery.body?.cancel()
 
     await webServerManager.stop([serverId])
   },

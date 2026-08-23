@@ -21,6 +21,11 @@ import { ADMIN_PROTOCOL_VERSION } from 'utils/constants.ts'
  * helpers only ever return the parsed body, not headers, so a caller that needs to check it today
  * has to fetch directly instead.
  *
+ * `model` is always `encodeURIComponent`-escaped before it's interpolated into the request path —
+ * `RestClient` builds the final URL by plain string concatenation, so an unescaped `/`, `..`, `?`,
+ * or `#` in `model` would otherwise land as extra path segments/query string on the target
+ * service's own admin API instead of a single opaque path component.
+ *
  * @requires @zanix/database
  *
  * @example
@@ -54,7 +59,7 @@ export class TriggersAdminClient extends RestClient {
 
   /** Gets a single trigger configuration entry by `model`. */
   public get(model: string): Promise<TriggersModelAttrs> {
-    return this.http.get<TriggersModelAttrs>(`/admin/triggers/${model}`)
+    return this.http.get<TriggersModelAttrs>(`/admin/triggers/${encodeURIComponent(model)}`)
   }
 
   /** Creates a new trigger configuration entry for `model`. */
@@ -69,13 +74,14 @@ export class TriggersAdminClient extends RestClient {
     model: string,
     changes: UpdateTriggerInput,
   ): Promise<TriggersModelAttrs> {
-    return this.http.put<TriggersModelAttrs>(`/admin/triggers/${model}`, {
-      body: JSON.stringify(changes),
-    })
+    return this.http.put<TriggersModelAttrs>(
+      `/admin/triggers/${encodeURIComponent(model)}`,
+      { body: JSON.stringify(changes) },
+    )
   }
 
   /** Deletes a trigger configuration entry by `model`. */
   public async remove(model: string): Promise<void> {
-    await this.http.delete(`/admin/triggers/${model}`)
+    await this.http.delete(`/admin/triggers/${encodeURIComponent(model)}`)
   }
 }

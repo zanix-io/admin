@@ -5,6 +5,7 @@ import type {
 } from '@zanix/notifications'
 import type { ServiceRegistryEntry } from 'typings/registry.ts'
 
+import logger from '@zanix/logger'
 import { ProgramModule } from '@zanix/server'
 import { TemplatesAdminRepository, toSyncCodeTemplateEntries } from '@zanix/notifications'
 import { DiscoveryAdminClient } from 'modules/discovery/discovery.client.ts'
@@ -82,13 +83,27 @@ export async function syncTemplatesFromRegisteredService(
   updatedBy?: string,
 ): Promise<SyncCodeTemplatesResult> {
   const service = getServiceRegistry().get(serviceId)
-  const client = await getTemplatesDiscoveryClientFactory()(service)
-  const entries = await pullTemplateEntries(client)
-  return ProgramModule.providers.get(TemplatesAdminRepository)
-    .syncCodeTemplates(
-      entries,
-      updatedBy as never,
+  try {
+    const client = await getTemplatesDiscoveryClientFactory()(service)
+    const entries = await pullTemplateEntries(client)
+    return await ProgramModule.providers.get(TemplatesAdminRepository)
+      .syncCodeTemplates(
+        entries,
+        updatedBy as never,
+      )
+  } catch (error) {
+    // Covers every real failure mode of this cross-service orchestration in one place — the
+    // Discovery fetch (both the `'templates'`/`'code-templates'` attempts inside
+    // `pullTemplateEntries`) and the local `syncCodeTemplates` merge — rather than duplicating a
+    // log per internal step. Rethrown unchanged: see this function's own doc, "propagates as-is,
+    // uncaught — masking it here would only hide a real problem, not route around one".
+    logger.error(
+      `[ADMIN_TEMPLATES_SYNC_FAILED] Failed to sync templates from registered service ` +
+        `"${serviceId}" (${service.adminBaseUrl}).`,
+      error,
     )
+    throw error
+  }
 }
 
 /**

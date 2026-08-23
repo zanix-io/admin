@@ -102,6 +102,47 @@ Deno.test('TriggersAdminClient.update PUTs the given changes', async () => {
   assertEquals(url, 'http://svc.internal:1234/admin/triggers/User')
 })
 
+Deno.test('TriggersAdminClient.get encodes a model containing a path separator', async () => {
+  const mockFetch = spy((_url: string, _opts: any) =>
+    jsonResponse({ model: 'a/b', ...TRIGGER_DEFAULTS })
+  )
+  globalThis.fetch = mockFetch as unknown as typeof fetch
+
+  const client = new TriggersAdminClient({ baseUrl: 'http://svc.internal:1234' })
+  await client.get('../admin/other')
+
+  const [url] = mockFetch.calls[0].args as [string, any]
+  assertEquals(url, 'http://svc.internal:1234/admin/triggers/..%2Fadmin%2Fother')
+})
+
+Deno.test('TriggersAdminClient.update encodes a model containing a path separator', async () => {
+  const mockFetch = spy((_url: string, opts: any) => {
+    assertEquals(opts.method, 'PUT')
+    return jsonResponse({ model: 'x', ...TRIGGER_DEFAULTS })
+  })
+  globalThis.fetch = mockFetch as unknown as typeof fetch
+
+  const client = new TriggersAdminClient({ baseUrl: 'http://svc.internal:1234' })
+  await client.update('a/../b', { active: false })
+
+  const [url] = mockFetch.calls[0].args as [string, any]
+  assertEquals(url, 'http://svc.internal:1234/admin/triggers/a%2F..%2Fb')
+})
+
+Deno.test('TriggersAdminClient.remove encodes a model containing a path separator', async () => {
+  const mockFetch = spy((_url: string, opts: any) => {
+    assertEquals(opts.method, 'DELETE')
+    return jsonResponse({ deleted: 'x' })
+  })
+  globalThis.fetch = mockFetch as unknown as typeof fetch
+
+  const client = new TriggersAdminClient({ baseUrl: 'http://svc.internal:1234' })
+  await client.remove('a/b')
+
+  const [url] = mockFetch.calls[0].args as [string, any]
+  assertEquals(url, 'http://svc.internal:1234/admin/triggers/a%2Fb')
+})
+
 Deno.test('TriggersAdminClient accepts a bare contextId string (RestClient shape)', () => {
   const client = new TriggersAdminClient('svc-context')
 

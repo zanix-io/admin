@@ -16,8 +16,9 @@ import { activateApps, bootstrapAppServer, deactivateApps } from '@zanix/app/run
 
 import logger from '@zanix/logger'
 import { ADMIN_HUB_APPLICATION } from '../utils/constants.ts'
-import type { TemplatesControllerOptions } from './templates/templates.handler.ts'
+import type { TemplatesControllerOptions } from '@zanix/notifications/templates-api'
 import type { TriggersControllerOptions } from './triggers/triggers.handler.ts'
+import type { DlqControllerOptions } from './dlq/dlq.handler.ts'
 import { checkServiceRegistryReachability } from './registry/reachability.ts'
 import { defineAdminHubApp, getAdminHubSubApps } from './admin-hub-app.ts'
 import type { AdminStartApplication } from './admin-hub-app.ts'
@@ -77,6 +78,14 @@ export type StartOptions = BootstrapServerOptions & {
     | false
     | (TemplatesControllerOptions & { application?: AdminStartApplication })
   /**
+   * Options for the DLQ (Dead Letter Queue) route, or `false` to skip registering it entirely.
+   * `application: 'main'` mounts it on the default Application's own public, unprefixed server
+   * instead of {@link ADMIN_HUB_APPLICATION}'s own server, same as {@link triggers}/{@link templates}.
+   */
+  dlq?:
+    | false
+    | (DlqControllerOptions & { application?: AdminStartApplication })
+  /**
    * Opt-in, fire-and-forget reachability check against every entry in the installed
    * `ServiceRegistry` (see {@link checkServiceRegistryReachability}) — catches a stale/typo'd
    * `adminBaseUrl` at startup instead of at first real use (`TriggersAggregator`'s calls have no
@@ -87,50 +96,53 @@ export type StartOptions = BootstrapServerOptions & {
   validateRegistry?: boolean
   /**
    * This hub's own identity for authenticating OUTBOUND to every registered service — when given,
-   * `start()` installs a `TriggersAggregator`/`TemplatesDiscoveryClientFactory` that sign+exchange+
-   * cache a real credential per target (via `@zanix/auth`'s `createServiceAuthClient`, adapted for
-   * `ServiceRegistryEntry` by `createServiceRegistryAuthHeaders`) instead of the unauthenticated
-   * default, which only works against a target that doesn't actually require one.
+   * `start()` installs a `TriggersAggregator`/`DlqAggregator`/`TemplatesDiscoveryClientFactory` that
+   * sign+exchange+cache a real credential per target (via `@zanix/auth`'s `createServiceAuthClient`,
+   * adapted for `ServiceRegistryEntry` by `createServiceRegistryAuthHeaders`) instead of the
+   * unauthenticated default, which only works against a target that doesn't actually require one.
    *
    * This is the common-case shortcut — equivalent to calling `setTriggersAggregator`/
-   * `setTemplatesDiscoveryClientFactory` yourself with `createServiceRegistryAuthHeaders`. Skip
-   * this option and call those directly instead for a custom `ServiceRegistry`, partial-failure
-   * tolerance, or different credentials for CRUD vs. Discovery reads — this option and a manual
-   * `setTriggersAggregator` call are mutually exclusive: whichever runs LAST before the first real
-   * `TriggersController`/`TemplatesController` request wins, so don't do both.
+   * `setDlqAggregator`/`setTemplatesDiscoveryClientFactory` yourself with
+   * `createServiceRegistryAuthHeaders`. Skip this option and call those directly instead for a
+   * custom `ServiceRegistry`, partial-failure tolerance, or different credentials for CRUD vs.
+   * Discovery reads — this option and a manual `setTriggersAggregator` call are mutually exclusive:
+   * whichever runs LAST before the first real `TriggersController`/`TemplatesController`/
+   * `DlqController` request wins, so don't do both.
    */
   auth?: ServiceAuthClientOptions
 }
 
 /**
  * Reference deployable entrypoint for `zanix-admin` — a thin, ready-to-run bootstrap over the
- * triggers/templates controllers, for a team that wants to stand up an instance without wiring the
- * registration/bootstrap sequence by hand (see the README's "Basic Usage" for the equivalent manual
- * wiring). Not required: any app importing `@zanix/admin`'s `createTriggersController`/
- * `createTemplatesController` directly and bootstrapping them through its own `@zanix/server`/
- * `@zanix/core` setup works just as well — this is a convenience, not the only supported path.
+ * triggers/templates/dlq controllers, for a team that wants to stand up an instance without wiring
+ * the registration/bootstrap sequence by hand (see the README's "Basic Usage" for the equivalent
+ * manual wiring). Not required: any app importing `@zanix/admin`'s `createTriggersController`/
+ * `createTemplatesController`/`createDlqController` directly and bootstrapping them through its own
+ * `@zanix/server`/`@zanix/core` setup works just as well — this is a convenience, not the only
+ * supported path.
  *
  * **Safe to run in the same process as `Zanix.start()` with its own `admin` option enabled** — this
  * package's two route sets are independent: `Zanix.start({ admin: true })` composes a business
- * service's own LOCAL admin CRUD (`/admin/triggers`, `/admin/templates`, `/admin/service-token`)
- * under `ADMIN_APPLICATION` (`../utils/constants.ts`), while this function composes its own central aggregator/proxy
- * (`/triggers`, `/templates`) under {@link ADMIN_HUB_APPLICATION} — two distinct Applications, so
- * neither's routes leak onto the other's server. `@zanix/server`'s boot-session isolation (see
- * `bootstrapServers`' own doc) further ensures that even firing both calls without an `await`
- * between them — e.g. `Zanix.start(opts); ZanixAdminHub.start(otherOpts)`, letting them register and
- * boot concurrently — can never wipe one sequence's not-yet-served routes out from under the other.
- * If both are anchored (`ADMIN_SERVER_ID` and `ADMIN_HUB_SERVER_ID` both set), each gets its own
- * stable prefix, so they can even share one port.
+ * service's own LOCAL admin CRUD (`/admin/triggers`, `/admin/templates`, `/admin/dlq`,
+ * `/admin/service-token`) under `ADMIN_APPLICATION` (`../utils/constants.ts`), while this function
+ * composes its own central aggregator/proxy (`/triggers`, `/templates`, `/dlq`) under
+ * {@link ADMIN_HUB_APPLICATION} — two distinct Applications, so neither's routes leak onto the
+ * other's server. `@zanix/server`'s boot-session isolation (see `bootstrapServers`' own doc) further
+ * ensures that even firing both calls without an `await` between them — e.g. `Zanix.start(opts);
+ * ZanixAdminHub.start(otherOpts)`, letting them register and boot concurrently — can never wipe one
+ * sequence's not-yet-served routes out from under the other. If both are anchored (`ADMIN_SERVER_ID`
+ * and `ADMIN_HUB_SERVER_ID` both set), each gets its own stable prefix, so they can even share one
+ * port.
  *
- * Both controllers default to {@link ADMIN_HUB_APPLICATION} (see `docs/APPLICATIONS.md`), so by
+ * Every controller defaults to {@link ADMIN_HUB_APPLICATION} (see `docs/applications.md`), so by
  * default only that one server starts — anchored (id-prefixed) whenever
  * `ADMIN_HUB_SERVER_ID` is set, a plain unprefixed server otherwise (there is no auto-generated
  * anchored id). A "public" REST server (the default Application, always unprefixed) only gets
- * bootstrapped when `triggers`/`templates` is explicitly configured with `application: 'main'` —
- * see the `wantsPublicRoute` check in the implementation for why this isn't attempted
+ * bootstrapped when `triggers`/`templates`/`dlq` is explicitly configured with `application: 'main'`
+ * — see the `wantsPublicRoute` check in the implementation for why this isn't attempted
  * unconditionally.
  *
- * Only ever starts REST servers (the triggers/templates routes are REST-only) — a `graphql`/
+ * Only ever starts REST servers (the triggers/templates/dlq routes are REST-only) — a `graphql`/
  * `socket` entry in `options` is accepted (forwarded as-is to `bootstrapServers`) but has nothing
  * of this package's own to serve.
  *
@@ -146,7 +158,7 @@ export type StartOptions = BootstrapServerOptions & {
  * SIGKILL-after-grace-period is the correct backstop for a shutdown that didn't complete cleanly, not
  * this handler forcing it.
  *
- * @param options - `triggers`/`templates` configure (or, as `false`, skip) each built-in
+ * @param options - `triggers`/`templates`/`dlq` configure (or, as `false`, skip) each built-in
  * controller; everything else is forwarded as-is to `@zanix/server`'s `bootstrapServers` (port,
  * cors, gzip, `onCreate`, etc. — see its own docs for the full shape).
  * @returns The `ServerID`s of whatever servers were actually started.
@@ -213,6 +225,7 @@ async function startSequence(options: StartOptions): Promise<ServerID[]> {
   const {
     triggers = {},
     templates = {},
+    dlq = {},
     validateRegistry = false,
     auth,
     ...serverOptions
@@ -220,13 +233,17 @@ async function startSequence(options: StartOptions): Promise<ServerID[]> {
 
   // Composition (registering controllers under their own Application, resolving/installing the
   // `'service-registry'` resource, wiring `auth` if given) — see `defineAdminHubApp`'s own doc.
-  // `getAdminHubSubApps()` (Triggers/Templates' own physically-separate operations/mcp sub-apps —
-  // see `admin-hub-app.ts`'s own doc) activates alongside it in the SAME call, so a future sub-app
-  // sharing a root resource with `defineAdminHubApp` still resolves to the same instance.
-  // `activateApps` runs `onStart` too, but none of these apps declare one.
-  const hubSubApps = getAdminHubSubApps()
+  // `getAdminHubSubApps({ triggers, templates, dlq })` (Triggers/Templates/DLQ's own
+  // physically-separate operations/mcp sub-apps — see `admin-hub-app.ts`'s own doc) activates
+  // alongside it in the SAME call, so a future sub-app sharing a root resource with
+  // `defineAdminHubApp` still resolves to the same instance. Passing the SAME `{ triggers,
+  // templates, dlq }` this function already destructured from `options` — not a zero-arg call —
+  // is what keeps a resource's operations/mcp surface gated on the exact same signal as its REST
+  // controller (see `getAdminHubSubApps`'s own doc). `activateApps` runs `onStart` too, but none
+  // of these apps declare one.
+  const hubSubApps = getAdminHubSubApps({ triggers, templates, dlq })
   activated = await activateApps([
-    defineAdminHubApp({ triggers, templates, auth }),
+    defineAdminHubApp({ triggers, templates, dlq, auth }),
     ...hubSubApps,
   ])
 
@@ -243,7 +260,8 @@ async function startSequence(options: StartOptions): Promise<ServerID[]> {
   // never purge the registry afterward either, so the route could get served twice. Skipping the
   // call entirely by default removes that risk outright rather than merely mitigating it.
   const wantsPublicRoute = (triggers !== false && triggers.application === DEFAULT_APPLICATION) ||
-    (templates !== false && templates.application === DEFAULT_APPLICATION)
+    (templates !== false && templates.application === DEFAULT_APPLICATION) ||
+    (dlq !== false && dlq.application === DEFAULT_APPLICATION)
 
   const publicServers = wantsPublicRoute
     ? await bootstrapServers(serverOptions, { finalize: false })

@@ -5,7 +5,96 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/) and this project
 adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.0.0] - 2026-08-23
+
+### Fixed
+
+- `deno lint`'s own `@zanix/utils` plugin (`deno-zanix-plugin`) is now version-pinned (`^3.0.0`),
+  matching every other `@zanix/utils` import in `deno.jsonc` — it used to resolve unpinned, so a
+  lint run could silently pick up a newer, unreviewed plugin version.
+- **`getLocalAdminSubApps()`/`getAdminHubSubApps()` no longer compose a resource's
+  `operations`/`mcp` sub-app when that resource's own REST controller is disabled.** Previously each
+  resource's operations/mcp surface was composed unconditionally, so e.g. `admin-dlq`'s own
+  operations stayed reachable (`ctx.remote('admin-dlq')`) in a deployment that never set
+  `DLQ_MODEL_NAME` and therefore never got a live `/admin/dlq` REST route, and `admin-hub-dlq`'s own
+  operations stayed composed even when a caller explicitly passed `dlq: false` to
+  `defineAdminHubApp`/`ZanixAdminHub.start()` — a reachable, auth-gated surface with no REST
+  counterpart, failing only at call time instead of simply not existing. Both functions now read the
+  same `isTriggersResourceEnabled`/ `isTemplatesResourceEnabled`/`isDlqResourceEnabled` gates (new
+  `admin-resource-gates.ts`, a thin shared re-export over
+  `@zanix/datamaster`'s/`@zanix/notifications`'s own `isXResourceEnabled()`) that
+  `defineAdminMetadata`'s REST/Discovery registration already uses, so a resource's REST surface and
+  its operations/mcp surface can never drift apart on which env signal gates them again.
+
+### Removed
+
+- **Breaking**: `createTriggersAdminController` and `createTemplatesController` (plus their
+  associated types/RTOs — `TemplatesControllerInstance`/`Options`, `CreateTemplateRTO`,
+  `TemplateParamsRTO`, `UpdateTemplateRTO`, `TriggerModelParamsRTO`) are no longer exported from
+  this package. Import `createTriggersAdminController` from `@zanix/datamaster/triggers-api`, and
+  `createTemplatesController` from `@zanix/notifications/templates-api` — each is owned and authored
+  by the package that owns the underlying data, per the "local API vs aggregator API" rule (see the
+  `zanix-local-api-vs-aggregator` skill).
+
+### Added
+
+- `createTemplatesSyncController` (`POST /templates/sync`) — this package's own cross-service
+  extension to the templates resource, mounted alongside `@zanix/notifications/templates-api`'s
+  `createTemplatesController` under the same route prefix. Needs `ServiceRegistry`/cross-service
+  Discovery, so it stays in this package, unlike the CRUD routes.
+- `defineAdminMetadata` now also composes `/admin/dlq` (`@zanix/datamaster/dlq-api`'s
+  `createDlqAdminController`) plus a `/.well-known/zanix/dlq` Discovery endpoint
+  (`createDlqDiscoveryProvider`), gated by `ADMIN_ROLE`/the new `ADMIN_DLQ_ROLE`. Opt-in via
+  `DLQ_MODEL_NAME` being set — deliberately not on-by-default like triggers, since
+  `registerDLQModel()` is a standalone bootstrap call, never auto-run the way the triggers model is;
+  see `defineAdminMetadata`'s own doc for the full reasoning. New `ADMIN_DLQ_ROLE`/
+  `ADMIN_DLQ_APPLICATION_ENV` constants, exported from `mod.ts` alongside their triggers/templates
+  counterparts. Requires `@zanix/datamaster`'s `dlq-api` subpath and `createDlqDiscoveryProvider`
+  (published as of `@zanix/datamaster@1.5.0`).
+- `createRegistryController` (`GET /registry`) — a single, read-only route reflecting the installed
+  `ServiceRegistry`. Always composed by `defineAdminHubApp`, unconditionally — no `registry: false`
+  opt-out the way `triggers`/`templates`/`dlq` each have, since `ServiceRegistry` always exists
+  regardless of which of those three are enabled. Guarded by `ADMIN_ROLE` only — deliberately no
+  dedicated `ADMIN_REGISTRY_ROLE`, since this isn't an individually-gateable resource the way the
+  other three are.
+- **`defineAdminHubApp`/`ZanixAdminHub.start()` also compose `/dlq` (new `createDlqController`)** —
+  a proxy/aggregator over every registered service's own `/admin/dlq`, mirroring
+  `createTriggersController`'s shape one domain over (never owns DLQ data itself). Backed by new
+  `DlqAggregator`/`setDlqAggregator`/`getDlqAggregator`, `DlqAdminClient`, and RTOs
+  (`PushDLQEntryRTO`/`RequeueDLQEntryRTO`/`DiscardDLQEntryRTO`/`DlqServiceParamsRTO`/
+  `DlqServiceEntryParamsRTO`), all exported from `mod.ts`. On by default — opt out via `dlq: false`,
+  the same shape as `triggers` (unlike `templates`, `createDlqController` bakes its own
+  `ADMIN_ROLE`/`ADMIN_DLQ_ROLE` guard in, so it needs no guard-injection). New `ADMIN_DLQ_ROLE`,
+  `ADMIN_HUB_DLQ_APPLICATION`/`ADMIN_DLQ_APPLICATION` constants. Also gets its own
+  `operations`/`mcp` sub-app on both sides (`dlq/hub-dlq-app.ts`, `dlq/local-dlq-app.ts`), composed
+  via `getAdminHubSubApps()`/`getLocalAdminSubApps()` alongside Triggers/Templates — only the
+  read-only `list`/`get` operations opt into `mcp`, same reasoning as Triggers/Templates.
+- Three new hub-facing HTTP clients — `TriggersHubClient`, `TemplatesHubClient`, `RegistryHubClient`
+  — for calling `zanix-admin`'s OWN hub-side `/triggers`/`/templates`/`/registry` routes remotely
+  (e.g. from an external ops UI like `@zanix/console`), distinct from the existing service-facing
+  clients (`TriggersAdminClient`/`TemplatesAdminClient`/`DlqAdminClient`), which each call a
+  business SERVICE's own local `/admin/<x>` API instead. `TemplatesHubClient` is CRUD-only — the hub
+  composes no `POST /templates/sync` route today.
+
+### Changed
+
+- `TriggersAggregator`'s `list`/`get`/`create`/`update`/`remove` now log
+  (`ADMIN_TRIGGERS_DISCOVERY_FAILED`/`ADMIN_TRIGGERS_PROXY_FAILED`, via `@zanix/logger`) which
+  registered service's own Discovery/CRUD call actually failed before re-throwing — previously a
+  failure surfaced only as the bare rejected error, losing which service in the fan-out (`list()`)
+  or which proxy target (`get`/`create`/`update`/`remove`) was the culprit. Same shape
+  `DlqAggregator` (new, above) ships with from the start. No change to the thrown error itself,
+  purely additive diagnostics.
+- `defineAdminMetadata`/`defineAdminHubMetadata` now build an explicit `guards`/`versionProtocol`
+  config and pass it into `createTriggersAdminController`/ `createTemplatesController` — neither
+  factory assumes an auth mechanism on its own anymore.
+- **BREAKING: `/admin/templates` registration follows `@zanix/notifications`'s own selector-based
+  rename.** `defineAdminMetadata()` now gates on `templatesBackendMode() === 'local'` instead of
+  `Deno.env.get(TEMPLATES_MODEL_NAME) && !isDatabaseTemplatesDisabled()` — a bare
+  `TEMPLATES_MODEL_NAME` with no `TEMPLATES_BACKEND=local` no longer registers the templates admin
+  API (it never took effect in `@zanix/notifications` itself anymore either, so this closes a real
+  drift between what this package gated on and what actually ran). Requires a `@zanix/notifications`
+  version carrying its own `TEMPLATES_BACKEND` rename.
 
 ## [1.1.0] - 2026-08-17
 

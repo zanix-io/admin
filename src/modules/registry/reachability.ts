@@ -1,7 +1,6 @@
 import type { ServiceRegistry } from './registry.ts'
 
-import { RestClient } from '@zanix/server'
-import { HttpError } from '@zanix/errors'
+import { RestClient, RestClientError } from '@zanix/server'
 import logger from '@zanix/logger'
 import { getServiceRegistry } from './registry.ts'
 
@@ -21,19 +20,16 @@ export type ReachabilityResult = {
 }
 
 /**
- * Extracts the real HTTP status code a failed `RestClient` call actually received — `RestClient`
- * always throws `HttpError('BAD_REQUEST')` on any non-2xx response, so the real code only survives
- * in `error.cause.message`'s `"[HTTP <code>] <statusText>"` prefix. Exported (not just used here)
- * so `templates-sync.ts`'s own fallback logic can reuse it instead of a third hand-rolled copy —
- * `@zanix/notifications`'s `RemoteTemplateBackend` has an independent, package-local copy of this
- * same helper for the same reason, on the other side of the same exchange.
+ * Extracts the real HTTP status code a failed `RestClient` call actually received, off its own
+ * `RestClientError.realHttpStatus` getter — `undefined` for a genuine transport-level failure (no
+ * response came back at all — DNS, timeout, connection refused), same as for anything that isn't a
+ * `RestClientError` to begin with. Exported (not just used here) so `templates-sync.ts`'s own
+ * fallback logic can reuse it instead of a second hand-rolled copy — `@zanix/notifications`'s
+ * `RemoteTemplateBackend` has an independent, package-local copy of this same helper for the same
+ * reason, on the other side of the same exchange.
  */
 export function realHttpStatus(error: unknown): number | undefined {
-  if (!(error instanceof HttpError) || !(error.cause instanceof Error)) {
-    return undefined
-  }
-  const match = error.cause.message.match(/^\[HTTP (\d+)\]/)
-  return match ? Number(match[1]) : undefined
+  return error instanceof RestClientError ? error.realHttpStatus : undefined
 }
 
 /**

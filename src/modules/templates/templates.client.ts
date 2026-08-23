@@ -29,6 +29,11 @@ import { ADMIN_PROTOCOL_VERSION } from 'utils/constants.ts'
  * helpers only ever return the parsed body, not headers, so a caller that needs to check it today
  * has to fetch directly instead.
  *
+ * `name` is always `encodeURIComponent`-escaped before it's interpolated into the request path —
+ * `RestClient` builds the final URL by plain string concatenation, so an unescaped `/`, `..`, `?`,
+ * or `#` in `name` would otherwise land as extra path segments/query string on the target
+ * service's own admin API instead of a single opaque path component.
+ *
  * @requires @zanix/notifications
  *
  * @example
@@ -63,7 +68,7 @@ export class TemplatesAdminClient extends RestClient {
   /** Gets a single template entry by `channel`/`name`. */
   public get(channel: Notifiers, name: string): Promise<ZanixTemplateAttrs> {
     return this.http.get<ZanixTemplateAttrs>(
-      `/admin/templates/${channel}/${name}`,
+      `/admin/templates/${channel}/${encodeURIComponent(name)}`,
     )
   }
 
@@ -81,7 +86,7 @@ export class TemplatesAdminClient extends RestClient {
     changes: UpdateTemplateInput,
   ): Promise<ZanixTemplateAttrs> {
     return this.http.put<ZanixTemplateAttrs>(
-      `/admin/templates/${channel}/${name}`,
+      `/admin/templates/${channel}/${encodeURIComponent(name)}`,
       {
         body: JSON.stringify(changes),
       },
@@ -90,7 +95,7 @@ export class TemplatesAdminClient extends RestClient {
 
   /** Deactivates a template entry by `channel`/`name` (soft delete, same as the local API). */
   public async remove(channel: Notifiers, name: string): Promise<void> {
-    await this.http.delete(`/admin/templates/${channel}/${name}`)
+    await this.http.delete(`/admin/templates/${channel}/${encodeURIComponent(name)}`)
   }
 
   /**
