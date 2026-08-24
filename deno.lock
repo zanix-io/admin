@@ -6,6 +6,7 @@
     "jsr:@std/assert@0.217": "0.217.0",
     "jsr:@std/assert@0.224": "0.224.0",
     "jsr:@std/assert@1.0.19": "1.0.19",
+    "jsr:@std/assert@^1.0.15": "1.0.19",
     "jsr:@std/assert@^1.0.19": "1.0.19",
     "jsr:@std/async@^1.0.0-rc.1": "1.5.0",
     "jsr:@std/async@^1.5.0": "1.5.0",
