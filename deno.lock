@@ -6,16 +6,18 @@
     "jsr:@std/assert@0.217": "0.217.0",
     "jsr:@std/assert@0.224": "0.224.0",
     "jsr:@std/assert@1.0.19": "1.0.19",
-    "jsr:@std/assert@^1.0.15": "1.0.19",
     "jsr:@std/assert@^1.0.19": "1.0.19",
     "jsr:@std/async@^1.0.0-rc.1": "1.5.0",
+    "jsr:@std/async@^1.5.0": "1.5.0",
     "jsr:@std/cli@~0.224.7": "0.224.7",
+    "jsr:@std/data-structures@^1.1.2": "1.1.2",
     "jsr:@std/encoding@1": "1.0.11",
     "jsr:@std/encoding@1.0.0-rc.2": "1.0.0-rc.2",
     "jsr:@std/fmt@0.224": "0.224.0",
     "jsr:@std/fmt@1": "1.0.10",
     "jsr:@std/fmt@~0.225.4": "0.225.6",
     "jsr:@std/fs@1": "1.0.24",
+    "jsr:@std/fs@^1.0.24": "1.0.24",
     "jsr:@std/http@0.224": "0.224.5",
     "jsr:@std/internal@^1.0.12": "1.0.14",
     "jsr:@std/internal@^1.0.14": "1.0.14",
@@ -26,6 +28,7 @@
     "jsr:@std/path@1": "1.1.6",
     "jsr:@std/path@1.0.0-rc.2": "1.0.0-rc.2",
     "jsr:@std/path@^1.1.5": "1.1.6",
+    "jsr:@std/path@^1.1.6": "1.1.6",
     "jsr:@std/semver@^1.0.8": "1.0.8",
     "jsr:@std/streams@~0.224.5": "0.224.5",
     "jsr:@std/testing@1.0.20": "1.0.20",
@@ -33,10 +36,13 @@
     "jsr:@zanix/asyncmq@0.7": "0.7.0",
     "jsr:@zanix/auth@0.8": "0.8.0",
     "jsr:@zanix/datamaster@1": "1.5.0",
+    "jsr:@zanix/datamaster@^1.5.0": "1.5.0",
     "jsr:@zanix/notifications@0.5": "0.5.0",
-    "jsr:@zanix/server@3": "3.3.0",
-    "jsr:@zanix/server@^3.3.0": "3.3.0",
-    "jsr:@zanix/utils@3": "3.0.1",
+    "jsr:@zanix/server@3": "3.4.0",
+    "jsr:@zanix/server@^3.3.0": "3.4.0",
+    "jsr:@zanix/server@^3.4.0": "3.4.0",
+    "jsr:@zanix/utils@3": "3.0.2",
+    "jsr:@zanix/utils@^3.0.2": "3.0.2",
     "npm:@aws-sdk/client-s3@^3.700.0": "3.1116.0",
     "npm:amqplib@^2.0.1": "2.0.1",
     "npm:graphql@16": "16.14.2",
@@ -57,7 +63,7 @@
       "dependencies": [
         "jsr:@std/encoding@1",
         "jsr:@std/fmt@1",
-        "jsr:@std/fs",
+        "jsr:@std/fs@1",
         "jsr:@std/path@1"
       ]
     },
@@ -78,6 +84,9 @@
     },
     "@std/cli@0.224.7": {
       "integrity": "654ca6477518e5e3a0d3fabafb2789e92b8c0febf1a1d24ba4b567aba94b5977"
+    },
+    "@std/data-structures@1.1.2": {
+      "integrity": "2471377c9e0051f9ec34e57d0ebd0ad133a5a889677446ec6ba9938e4e102918"
     },
     "@std/encoding@1.0.0-rc.2": {
       "integrity": "160d7674a20ebfbccdf610b3801fee91cf6e42d1c106dd46bbaf46e395cd35ef"
@@ -104,7 +113,7 @@
     "@std/http@0.224.5": {
       "integrity": "b03b5d1529f6c423badfb82f6640f9f2557b4034cd7c30655ba5bb447ff750a4",
       "dependencies": [
-        "jsr:@std/async",
+        "jsr:@std/async@^1.0.0-rc.1",
         "jsr:@std/cli",
         "jsr:@std/encoding@1.0.0-rc.2",
         "jsr:@std/fmt@~0.225.4",
@@ -153,7 +162,12 @@
     "@std/testing@1.0.20": {
       "integrity": "21380ed438672762e4ec549cbf4fe41c5b68f5598773a30b64abe7375513e721",
       "dependencies": [
-        "jsr:@std/assert@^1.0.19"
+        "jsr:@std/assert@^1.0.19",
+        "jsr:@std/async@^1.5.0",
+        "jsr:@std/data-structures",
+        "jsr:@std/fs@^1.0.24",
+        "jsr:@std/internal@^1.0.14",
+        "jsr:@std/path@^1.1.6"
       ]
     },
     "@zanix/app@0.2.0": {
@@ -162,16 +176,16 @@
         "jsr:@std/semver",
         "jsr:@zanix/asyncmq",
         "jsr:@zanix/auth",
-        "jsr:@zanix/datamaster",
+        "jsr:@zanix/datamaster@1",
         "jsr:@zanix/server@3",
-        "jsr:@zanix/utils"
+        "jsr:@zanix/utils@3"
       ]
     },
     "@zanix/asyncmq@0.7.0": {
       "integrity": "f78d359102d70b147be1dde2a506f2ff71d9e336b0f2e766c49551a7101614cc",
       "dependencies": [
         "jsr:@zanix/server@3",
-        "jsr:@zanix/utils",
+        "jsr:@zanix/utils@3",
         "npm:amqplib"
       ]
     },
@@ -179,15 +193,16 @@
       "integrity": "2526fbccc5990c6cb4334bc7e726a9ee6d3069efce6299c9cd752540c21ee504",
       "dependencies": [
         "jsr:@zanix/server@3",
-        "jsr:@zanix/utils"
+        "jsr:@zanix/utils@3"
       ]
     },
     "@zanix/datamaster@1.5.0": {
       "integrity": "99c3e4801a4a5fdaecbc5bcaccc4d54d739066060ddc1a52b653d829218f3d62",
       "dependencies": [
         "jsr:@db/sqlite",
+        "jsr:@std/path@0.224",
         "jsr:@zanix/server@3",
-        "jsr:@zanix/utils",
+        "jsr:@zanix/utils@3",
         "npm:@aws-sdk/client-s3",
         "npm:mongoose",
         "npm:redis"
@@ -197,25 +212,25 @@
       "integrity": "894a82f9623e09fe536f0d6edc171ecad8fc7c29aabe90af19700b91f2706663",
       "dependencies": [
         "jsr:@zanix/auth",
-        "jsr:@zanix/datamaster",
+        "jsr:@zanix/datamaster@1",
         "jsr:@zanix/server@^3.3.0",
-        "jsr:@zanix/utils",
+        "jsr:@zanix/utils@3",
         "npm:handlebars"
       ]
     },
-    "@zanix/server@3.3.0": {
-      "integrity": "c7bad63440e6bbd4567b9d6a8d19439e410c726ee0384e0e867be267e1dfe1f1",
+    "@zanix/server@3.4.0": {
+      "integrity": "1868349aff4954c40b236d8f9c0cef197aed79774bbc13ad8f31cfbc1c92893d",
       "dependencies": [
         "jsr:@std/http",
         "jsr:@std/path@0.224",
-        "jsr:@zanix/server@^3.3.0",
-        "jsr:@zanix/utils",
+        "jsr:@zanix/server@^3.4.0",
+        "jsr:@zanix/utils@3",
         "npm:graphql",
         "npm:redis"
       ]
     },
-    "@zanix/utils@3.0.1": {
-      "integrity": "24bbda1c6aad14e04fe42798044400677664456b9865d2d3ebf81aa188349002",
+    "@zanix/utils@3.0.2": {
+      "integrity": "ba92ac7d773d42302d40c7612f1cc810fd3c5e08e658f7c9a2bedbec1ec52e04",
       "dependencies": [
         "jsr:@std/fmt@0.224",
         "jsr:@std/path@0.224"
@@ -657,10 +672,10 @@
       "jsr:@std/testing@1.0.20",
       "jsr:@zanix/app@0.2",
       "jsr:@zanix/auth@0.8",
-      "jsr:@zanix/datamaster@1",
+      "jsr:@zanix/datamaster@^1.5.0",
       "jsr:@zanix/notifications@0.5",
-      "jsr:@zanix/server@3",
-      "jsr:@zanix/utils@3"
+      "jsr:@zanix/server@^3.4.0",
+      "jsr:@zanix/utils@^3.0.2"
     ]
   }
 }
