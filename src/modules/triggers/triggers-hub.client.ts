@@ -1,4 +1,8 @@
-import type { CreateTriggerInput, TriggersModelAttrs, UpdateTriggerInput } from '@zanix/database'
+import type {
+  CreateTriggerInput,
+  TriggersModelAttrs,
+  UpdateTriggerInput,
+} from '@zanix/datamaster/database'
 import type { AggregatedTrigger } from './triggers.aggregator.ts'
 
 import { ADMIN_PROTOCOL_HEADER, RestClient } from '@zanix/server'
@@ -32,7 +36,7 @@ import { ADMIN_PROTOCOL_VERSION } from 'utils/constants.ts'
  * always caller-supplied; construct with whatever credential the hub's own `AuthTokenValidation`
  * accepts (typically a human admin's `type: 'user'` token, or a machine caller's `type: 'api'` one).
  *
- * @requires @zanix/database
+ * @requires @zanix/datamaster/database
  *
  * @example
  * ```ts

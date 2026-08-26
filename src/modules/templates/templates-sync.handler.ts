@@ -1,5 +1,5 @@
 import type { HandlerContext } from '@zanix/server'
-import type { SyncCodeTemplatesResult } from '@zanix/notifications'
+import type { SyncCodeTemplatesResult } from '@zanix/notifications/templates-types'
 
 import { Controller, Post, ZanixController } from '@zanix/server'
 import { AuthTokenValidation } from '@zanix/auth'

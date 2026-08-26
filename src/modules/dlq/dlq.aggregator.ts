@@ -1,9 +1,9 @@
 import type {
-  DLQDiscardOptions,
-  DLQEntryAttrs,
-  DLQPushInput,
-  DLQRequeueOptions,
-} from '@zanix/database'
+  DlqDiscardOptions,
+  DlqEntryAttrs,
+  DlqPushInput,
+  DlqRequeueOptions,
+} from '@zanix/datamaster/dlq'
 import type { ServiceRegistryEntry } from 'typings/registry.ts'
 import type { ServiceRegistry } from 'modules/registry/registry.ts'
 
@@ -13,7 +13,7 @@ import { DiscoveryAdminClient } from 'modules/discovery/discovery.client.ts'
 import { getServiceRegistry } from 'modules/registry/registry.ts'
 
 /** A DLQ entry fanned out from `list()`, tagged with which registered service it came from. */
-export type AggregatedDlqEntry = DLQEntryAttrs & { serviceId: string }
+export type AggregatedDlqEntry = DlqEntryAttrs & { serviceId: string }
 
 /**
  * Builds the `DlqAdminClient` used to call a given registered service — the pluggable seam for
@@ -59,9 +59,9 @@ const defaultDiscoveryClientFactory: DlqDiscoveryClientFactory = (
  * touches another service's database directly.
  *
  * Deliberately excludes the lease-fenced worker-only primitives (`claim`/`release`/`complete`/
- * `fail`) — same reasoning `DLQAdminService`'s own JSDoc gives: they're fenced by a `leaseOwner` a
+ * `fail`) — same reasoning `DlqAdminService`'s own JSDoc gives: they're fenced by a `leaseOwner` a
  * specific worker process holds, not something a remote admin/agent has a real lease to present.
- * Every method here maps 1:1 onto `DLQAdminService`'s own exposed subset
+ * Every method here maps 1:1 onto `DlqAdminService`'s own exposed subset
  * (`push`/`get`/`list`/`requeue`/`discard`/`remove`).
  *
  * A single service failing during `list()`'s fan-out fails the whole call (via `Promise.all`) —
@@ -100,7 +100,7 @@ export class DlqAggregator {
     const perService = await Promise.all(services.map(async (service) => {
       try {
         const client = await this.#createDiscoveryClient(service)
-        const entries = await client.snapshot<DLQEntryAttrs>('dlq')
+        const entries = await client.snapshot<DlqEntryAttrs>('dlq')
         return entries.map((entry) => ({
           ...entry,
           serviceId: service.serviceId,
@@ -122,7 +122,7 @@ export class DlqAggregator {
   }
 
   /** Gets a single DLQ entry from the given service. */
-  public async get(serviceId: string, id: string): Promise<DLQEntryAttrs> {
+  public async get(serviceId: string, id: string): Promise<DlqEntryAttrs> {
     const service = this.#registry.get(serviceId)
     try {
       const client = await this.#createClient(service)
@@ -140,8 +140,8 @@ export class DlqAggregator {
   /** Pushes a new DLQ entry onto the given service. */
   public async push(
     serviceId: string,
-    input: DLQPushInput,
-  ): Promise<DLQEntryAttrs> {
+    input: DlqPushInput,
+  ): Promise<DlqEntryAttrs> {
     const service = this.#registry.get(serviceId)
     try {
       const client = await this.#createClient(service)
@@ -161,8 +161,8 @@ export class DlqAggregator {
   public async requeue(
     serviceId: string,
     id: string,
-    options?: DLQRequeueOptions,
-  ): Promise<DLQEntryAttrs> {
+    options?: DlqRequeueOptions,
+  ): Promise<DlqEntryAttrs> {
     const service = this.#registry.get(serviceId)
     try {
       const client = await this.#createClient(service)
@@ -181,8 +181,8 @@ export class DlqAggregator {
   public async discard(
     serviceId: string,
     id: string,
-    options?: DLQDiscardOptions,
-  ): Promise<DLQEntryAttrs> {
+    options?: DlqDiscardOptions,
+  ): Promise<DlqEntryAttrs> {
     const service = this.#registry.get(serviceId)
     try {
       const client = await this.#createClient(service)

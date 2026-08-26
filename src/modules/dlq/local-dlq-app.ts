@@ -1,19 +1,19 @@
 import type { OperationDeclaration, ZanixAppDefinition } from '@zanix/app'
 import type {
-  DLQDiscardOptions,
-  DLQListOptions,
-  DLQPushInput,
-  DLQRequeueOptions,
-} from '@zanix/database'
+  DlqDiscardOptions,
+  DlqListOptions,
+  DlqPushInput,
+  DlqRequeueOptions,
+} from '@zanix/datamaster/dlq'
 
 import { defineZanixApp } from '@zanix/app'
 import { resolveTarget } from '@zanix/app/runtime'
-import { DLQAdminService } from '@zanix/database'
+import { DlqAdminService } from '@zanix/datamaster/dlq'
 import { ADMIN_DLQ_APPLICATION } from '../../utils/constants.ts'
 
 /**
  * This service's own persisted-DLQ (Dead Letter Queue) operations — `ctx.remote('admin-dlq').call(...)`/MCP
- * surface for `DLQAdminService`, the SAME business logic `@zanix/datamaster/dlq-api`'s
+ * surface for `DlqAdminService`, the SAME business logic `@zanix/datamaster/dlq-api`'s
  * `createDlqAdminController`/`/admin/dlq` REST controller already calls, resolved here via
  * `resolveTarget` — the same pattern `local-triggers-app.ts`'s `localTriggersOperations` already
  * establishes for `TriggersAdminService`. `resolveTarget(ADMIN_DLQ_APPLICATION, ...)` scopes it by
@@ -22,9 +22,9 @@ import { ADMIN_DLQ_APPLICATION } from '../../utils/constants.ts'
  *
  * Purely additive — `/admin/dlq` itself (once wired on `defineLocalAdminApp`, a separate concern
  * from this sub-app) is completely untouched; this is a second way to reach the exact same
- * `DLQAdminService`, never a second implementation of it.
+ * `DlqAdminService`, never a second implementation of it.
  *
- * `DLQAdminService` itself already excludes the lease-fenced worker-only primitives
+ * `DlqAdminService` itself already excludes the lease-fenced worker-only primitives
  * (`claim`/`release`/`complete`/`fail` — see that class's own JSDoc for why: they're fenced by a
  * `leaseOwner` a specific worker process holds, not something an admin/agent has a real lease to
  * present), so every operation below is already a genuine admin/operator action. Even so, only
@@ -40,15 +40,15 @@ import { ADMIN_DLQ_APPLICATION } from '../../utils/constants.ts'
 export const localDlqOperations: Record<string, OperationDeclaration> = {
   listDlqEntries: {
     handler: (payload) => {
-      const options = payload as DLQListOptions | undefined
-      return resolveTarget(ADMIN_DLQ_APPLICATION, DLQAdminService).list(options)
+      const options = payload as DlqListOptions | undefined
+      return resolveTarget(ADMIN_DLQ_APPLICATION, DlqAdminService).list(options)
     },
     mcp: { description: "Lists this service's own dead-letter queue entries." },
   },
   getDlqEntry: {
     handler: (payload) => {
       const { id } = payload as { id: string }
-      return resolveTarget(ADMIN_DLQ_APPLICATION, DLQAdminService).get(id)
+      return resolveTarget(ADMIN_DLQ_APPLICATION, DlqAdminService).get(id)
     },
     mcp: {
       description: 'Gets a single dead-letter queue entry by id.',
@@ -61,26 +61,26 @@ export const localDlqOperations: Record<string, OperationDeclaration> = {
   },
   pushDlqEntry: {
     handler: (payload) => {
-      const input = payload as DLQPushInput
-      return resolveTarget(ADMIN_DLQ_APPLICATION, DLQAdminService).push(input)
+      const input = payload as DlqPushInput
+      return resolveTarget(ADMIN_DLQ_APPLICATION, DlqAdminService).push(input)
     },
   },
   requeueDlqEntry: {
     handler: (payload) => {
-      const { id, ...options } = payload as { id: string } & DLQRequeueOptions
-      return resolveTarget(ADMIN_DLQ_APPLICATION, DLQAdminService).requeue(id, options)
+      const { id, ...options } = payload as { id: string } & DlqRequeueOptions
+      return resolveTarget(ADMIN_DLQ_APPLICATION, DlqAdminService).requeue(id, options)
     },
   },
   discardDlqEntry: {
     handler: (payload) => {
-      const { id, ...options } = payload as { id: string } & DLQDiscardOptions
-      return resolveTarget(ADMIN_DLQ_APPLICATION, DLQAdminService).discard(id, options)
+      const { id, ...options } = payload as { id: string } & DlqDiscardOptions
+      return resolveTarget(ADMIN_DLQ_APPLICATION, DlqAdminService).discard(id, options)
     },
   },
   removeDlqEntry: {
     handler: async (payload) => {
       const { id } = payload as { id: string }
-      await resolveTarget(ADMIN_DLQ_APPLICATION, DLQAdminService).remove(id)
+      await resolveTarget(ADMIN_DLQ_APPLICATION, DlqAdminService).remove(id)
       return { deleted: id }
     },
   },
@@ -95,7 +95,7 @@ export const localDlqOperations: Record<string, OperationDeclaration> = {
  * reachability today.
  *
  * `routes: false` — this sub-app owns no REST surface of its own. Declares no
- * `dependencies`/`resources` — `resolveTarget` reaches `DLQAdminService` through `@zanix/server`'s
+ * `dependencies`/`resources` — `resolveTarget` reaches `DlqAdminService` through `@zanix/server`'s
  * own DI (`ProgramModule.getInteractors()`), not through this app's own resource graph.
  *
  * DLQ is now mirrored on both sides, the same shape Triggers/Templates already establish — see

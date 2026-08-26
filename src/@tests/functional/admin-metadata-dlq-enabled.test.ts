@@ -1,12 +1,12 @@
 import { assert, assertEquals } from '@std/assert'
 import { stub } from '@std/testing/mock'
 import { bootstrapServers, webServerManager } from '@zanix/server'
-import { DLQ_MODEL_ENV } from '@zanix/database'
+import { DLQ_MODEL_ENV } from '@zanix/datamaster/dlq'
 import { ADMIN_APPLICATION, defineAdminMetadata } from '../../../mod.ts'
 
 // Covers `metadata.ts`'s `Deno.env.get(DLQ_MODEL_ENV)` true branch — DLQ's own opt-in gate,
 // deliberately shaped like templates' (not triggers' on-by-default-unless-disabled shape) since
-// `registerDLQModel()` is a standalone bootstrap call, never auto-run the way the triggers model
+// `registerDlqModel()` is a standalone bootstrap call, never auto-run the way the triggers model
 // is (see `defineAdminMetadata`'s own doc for the full reasoning). See
 // `admin-metadata-defaults.test.ts`'s own comment for why this needs its own file/process.
 

@@ -1,4 +1,8 @@
-import type { CreateTriggerInput, TriggersModelAttrs, UpdateTriggerInput } from '@zanix/database'
+import type {
+  CreateTriggerInput,
+  TriggersModelAttrs,
+  UpdateTriggerInput,
+} from '@zanix/datamaster/database'
 import type { ServiceRegistryEntry } from 'typings/registry.ts'
 import type { ServiceRegistry } from 'modules/registry/registry.ts'
 

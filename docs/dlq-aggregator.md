@@ -26,7 +26,7 @@ the _full_ paginated collection, including resolved (`'completed'`/`'discarded'`
 aggregator's own `list()`.
 
 **Deliberately excludes the lease-fenced worker-only primitives** (`claim`/`release`/`complete`/
-`fail`) — same reasoning `DLQAdminService`'s own JSDoc gives: they're fenced by a `leaseOwner` a
+`fail`) — same reasoning `DlqAdminService`'s own JSDoc gives: they're fenced by a `leaseOwner` a
 specific worker process holds, not something a remote admin/agent has a real lease to present.
 
 **Authentication is a pluggable seam**, same shape as `TriggersAggregator`. The constructor takes
@@ -116,7 +116,7 @@ vs aggregator API" rule (see the `zanix-local-api-vs-aggregator` skill).
 
 Don't confuse this with `createDlqController`/`DlqAggregator` above — it's the other side of the
 same wire protocol. `createDlqAdminController` builds the CRUD controller a **business service
-itself** exposes at a fixed `admin/dlq` prefix, backed directly by `DLQAdminService`. This is the
+itself** exposes at a fixed `admin/dlq` prefix, backed directly by `DlqAdminService`. This is the
 target `DlqAggregator`'s `DlqAdminClient` calls into on the other end of the wire — this controller
 owns real persisted data, `DlqAggregator` never does.
 

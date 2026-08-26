@@ -1,5 +1,5 @@
 import type { OperationDeclaration, ZanixAppDefinition } from '@zanix/app'
-import type { CreateTriggerInput, UpdateTriggerInput } from '@zanix/database'
+import type { CreateTriggerInput, UpdateTriggerInput } from '@zanix/datamaster/database'
 
 import { defineZanixApp } from '@zanix/app'
 import { ADMIN_HUB_TRIGGERS_APPLICATION } from '../../utils/constants.ts'

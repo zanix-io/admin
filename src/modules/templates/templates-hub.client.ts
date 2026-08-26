@@ -3,7 +3,7 @@ import type {
   Notifiers,
   UpdateTemplateInput,
   ZanixTemplateAttrs,
-} from '@zanix/notifications'
+} from '@zanix/notifications/templates-types'
 
 import { ADMIN_PROTOCOL_HEADER, RestClient } from '@zanix/server'
 import { ADMIN_PROTOCOL_VERSION } from 'utils/constants.ts'

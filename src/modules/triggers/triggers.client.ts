@@ -1,4 +1,8 @@
-import type { CreateTriggerInput, TriggersModelAttrs, UpdateTriggerInput } from '@zanix/database'
+import type {
+  CreateTriggerInput,
+  TriggersModelAttrs,
+  UpdateTriggerInput,
+} from '@zanix/datamaster/database'
 
 import { ADMIN_PROTOCOL_HEADER, RestClient } from '@zanix/server'
 import { ADMIN_PROTOCOL_VERSION } from 'utils/constants.ts'
@@ -26,7 +30,7 @@ import { ADMIN_PROTOCOL_VERSION } from 'utils/constants.ts'
  * or `#` in `model` would otherwise land as extra path segments/query string on the target
  * service's own admin API instead of a single opaque path component.
  *
- * @requires @zanix/database
+ * @requires @zanix/datamaster/database
  *
  * @example
  * ```ts

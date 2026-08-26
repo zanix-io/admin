@@ -19,8 +19,6 @@
  * its own `@zanix/server`/`@zanix/core`-based bootstrap directly. See the README for both.
  */
 
-import { start, stop } from 'modules/start.ts'
-
 export {
   getServiceRegistry,
   SERVICE_REGISTRY_ENV,
@@ -91,10 +89,13 @@ export { ADMIN_PROTOCOL_HEADER } from '@zanix/server'
 /**
  * Data access and business logic for this package's own templates collection — see
  * `@zanix/notifications`'s own `docs/templates.md` for the storage model this operates under.
+ * Imported from `@zanix/notifications/templates-api`, not the root barrel: that root also bundles
+ * unrelated connectors/providers reaching `graphql`/`redis`, which this package's own templates
+ * composition never needs.
  */
-export { TemplatesAdminRepository, TemplatesAdminService } from '@zanix/notifications'
+export { TemplatesAdminRepository, TemplatesAdminService } from '@zanix/notifications/templates-api'
 /** Re-exported so `syncTemplatesFromRegisteredService`'s own return type is nameable. */
-export type { SyncCodeTemplatesResult } from '@zanix/notifications'
+export type { SyncCodeTemplatesResult } from '@zanix/notifications/templates-types'
 /**
  * `POST /templates/sync` request DTO — see `createTemplatesSyncController`'s own doc.
  */
@@ -119,10 +120,22 @@ export type {
  * as `CreateTriggerRTO`/`UpdateTriggerRTO` above.
  */
 export {
-  DiscardDLQEntryRTO,
-  PushDLQEntryRTO,
-  RequeueDLQEntryRTO,
+  DiscardDlqEntryRTO,
+  PushDlqEntryRTO,
+  RequeueDlqEntryRTO,
 } from 'modules/dlq/rtos/dlq.rto.ts'
+// Deprecated aliases — `@zanix/datamaster` converged its own DLQ acronym casing from `DLQ` to
+// `Dlq`; these re-export the exact same bindings under their old names for one deprecation window,
+// same pattern as `@zanix/datamaster`'s own `[Unreleased]` CHANGELOG entry.
+/** @deprecated Use {@link DiscardDlqEntryRTO} instead — this alias will be removed in a future
+ * major release. */
+export { DiscardDlqEntryRTO as DiscardDLQEntryRTO } from 'modules/dlq/rtos/dlq.rto.ts'
+/** @deprecated Use {@link PushDlqEntryRTO} instead — this alias will be removed in a future major
+ * release. */
+export { PushDlqEntryRTO as PushDLQEntryRTO } from 'modules/dlq/rtos/dlq.rto.ts'
+/** @deprecated Use {@link RequeueDlqEntryRTO} instead — this alias will be removed in a future
+ * major release. */
+export { RequeueDlqEntryRTO as RequeueDLQEntryRTO } from 'modules/dlq/rtos/dlq.rto.ts'
 /**
  * Route params RTOs backing `createDlqController`'s `/dlq/:serviceId[/:id]` routes — re-exported so
  * those routes' own return types stay nameable in the generated docs.
@@ -133,7 +146,7 @@ export type { DlqServiceEntryParamsRTO, DlqServiceParamsRTO } from 'modules/dlq/
  * Data access and business logic for a business service's own persisted local triggers collection
  * (`zanix-triggers`), distinct from this package's own `/triggers` proxy/aggregator.
  */
-export { TriggersAdminRepository, TriggersAdminService } from '@zanix/database'
+export { TriggersAdminRepository, TriggersAdminService } from '@zanix/datamaster/triggers-api'
 
 /** Body RTO for `/admin/service-token` — see `createServiceExchangeController`. */
 export { ServiceExchangeRTO } from 'modules/service-exchange/service-exchange.rto.ts'
@@ -267,40 +280,10 @@ export {
 } from 'modules/templates/templates-sync.ts'
 
 /**
- * Reference deployable entrypoint — the quickest way to stand up a real `zanix-admin` instance:
- * registers `TriggersController`/`TemplatesController` and their supporting connectors/providers
- * (`@zanix/datamaster`'s Mongo/Redis/cache, `@zanix/auth`'s session infra, `@zanix/notifications`'s
- * `TemplateProvider`), then starts a REST server via `@zanix/server`'s `bootstrapServers`.
- *
- * Not required — an app that wires the controllers into its own bootstrap directly (see the
- * README's "Basic Usage") never needs this class at all.
- *
- * @example
- * ```ts
- * import ZanixAdminHub, { setTriggersAggregator, TriggersAggregator } from 'jsr:@zanix/admin@[version]'
- *
- * setTriggersAggregator(new TriggersAggregator(registry, clientFactory)) // install real per-service auth first
- *
- * await ZanixAdminHub.start()
- * ```
+ * Reference deployable entrypoint — see `modules/zanix-admin-hub.ts`'s own doc for the full
+ * rationale. Re-exported here so an existing `import ZanixAdminHub from '@zanix/admin'` call site
+ * keeps working unchanged; a caller that wants ONLY this class (not the RTOs/`TriggersAdminService`/
+ * thin HTTP clients this root barrel also bundles, which reach `@zanix/notifications/templates-api`
+ * — and transitively Handlebars — unconditionally) should import `@zanix/admin/hub` instead.
  */
-export default class ZanixAdminHub {
-  /**
-   * Registers this package's routes/connectors and starts a REST server for them.
-   *
-   * Also traps `SIGINT`/`SIGTERM` automatically (no opt-out) — either signal runs
-   * {@link ZanixAdminHub.stop} before exiting, same as `@zanix/core`'s own `Zanix.start()`.
-   *
-   * @param options - Forwarded as-is to `@zanix/server`'s `bootstrapServers` (port, cors, gzip,
-   * `onCreate`, etc.).
-   * @returns The `ServerID`s of whatever servers were actually started.
-   */
-  public static start: typeof start = start
-
-  /**
-   * Stops every server {@link ZanixAdminHub.start} started, then closes connector connections.
-   * Also called automatically on `SIGINT`/`SIGTERM` if {@link ZanixAdminHub.start} registered a
-   * handler for them.
-   */
-  public static stop: typeof stop = stop
-}
+export { default } from 'modules/zanix-admin-hub.ts'

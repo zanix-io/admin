@@ -5,6 +5,51 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/) and this project
 adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-08-26
+
+### Added
+
+- **`ZanixAdminHub.start({ serviceToken: true })` / `defineAdminHubApp({ serviceToken: true })`** —
+  opt-in composition of `POST /admin/service-token` (`createServiceExchangeController()`) directly
+  under `ADMIN_HUB_APPLICATION`, the SAME Application `/triggers`/`/templates`/`/dlq`/`/registry`
+  already register under. Closes a real gap found running `@zanix/console` end-to-end against a real
+  `ZanixAdminHub` instance: `console`'s own `admin-hub-auth.ts` assumes ONE `ADMIN_HUB_BASE_URL`
+  serves `/admin/service-token` alongside those other routes, but until now the only official way to
+  compose that controller was `@zanix/core`'s
+  `Zanix.start({ admin: true })`/`defineLocalAdminApp()`, under the DIFFERENT `ADMIN_APPLICATION` —
+  a hub operator had to hand-compose `createServiceExchangeController()` themselves to make that
+  single-base-URL assumption true. `false`/omitted (the default) keeps today's exact behavior
+  unchanged — this hub composes no service-token endpoint at all unless explicitly opted into.
+  Registered via the same `AdminHubModuleEntry`/`registerAdminHubModules` table `admin-hub-app.ts`
+  already uses for `registry` (not a new "sub-app" — it declares no `operations`/`mcp` surface of
+  its own, so it's never added to `HUB_SUB_APP_ENTRIES`). Deliberately NOT meant to be combined with
+  anchoring (`ADMIN_SERVER_ID`/`ADMIN_HUB_SERVER_ID`) for the same purpose — see
+  `StartOptions.serviceToken`'s own doc (`start.ts`) for why those solve different problems.
+
+### Fixed
+
+- **This package's own root `.` and `./hub` entry points unconditionally materialized `graphql`,
+  `redis`, and `amqplib`**, none of which this package's own triggers/templates/DLQ composition
+  needs. Three independent causes, all now fixed:
+  - `TriggersAdminRepository`/`TriggersAdminService`/`createTriggersDiscoveryProvider` and
+    `TemplatesAdminRepository`/`TemplatesAdminService`/`toSyncCodeTemplateEntries` were imported
+    from the bare `@zanix/datamaster`/`@zanix/notifications` roots — both roots also bundle
+    unrelated connectors/providers reaching `graphql`/`redis`/`amqplib`. Now imported from
+    `@zanix/datamaster/triggers-api`/`@zanix/notifications/templates-api` instead — see each
+    package's own CHANGELOG for the narrow exports this needed added there first.
+  - `isTriggersResourceEnabled`/`CreateTriggerInput`/`TriggersModelAttrs`/`UpdateTriggerInput` and
+    `isDlqResourceEnabled`/`Dlq*`/`DlqAdminService` were both imported through one combined
+    `@zanix/database` alias pointed at the bare `@zanix/datamaster` root. Split into
+    `@zanix/datamaster/database` and `@zanix/datamaster/dlq` — the two narrow subpaths that actually
+    define them.
+  - `admin-hub-app.ts`'s own `defineAdminHubMetadata` called `import('@zanix/datamaster/core')` and
+    `import('@zanix/auth/core')` with LITERAL inline strings — Deno's static module-graph walker
+    follows a literal dynamic `import()` argument the same as a static one, so both were resolved
+    (and their npm packages materialized) merely by importing this file, whether or not
+    `ZanixAdminHub.start()` was ever called. Routed through `DATAMASTER_CORE_SPECIFIER`/
+    `AUTH_CORE_SPECIFIER` (`modules/lazy/specifiers.ts`) instead, matching the non-literal pattern
+    `NOTIFICATIONS_CORE_SPECIFIER` already used right next to them.
+
 ## [2.0.0] - 2026-08-23
 
 ### Fixed

@@ -3,12 +3,12 @@ import { stub } from '@std/testing/mock'
 import { activateApps, getLocalOperation } from '@zanix/app/runtime'
 import {
   DLQ_MODEL_ENV,
-  DLQAdminService,
-  type DLQEntryAttrs,
-  type DLQPaginatedResult,
-  TriggersAdminService,
-  type TriggersModelAttrs,
-} from '@zanix/database'
+  DlqAdminService,
+  type DlqEntryAttrs,
+  type DlqPaginatedResult,
+} from '@zanix/datamaster/dlq'
+import type { TriggersModelAttrs } from '@zanix/datamaster/database'
+import { TriggersAdminService } from '@zanix/datamaster/triggers-api'
 import {
   TEMPLATES_BACKEND_ENV,
   TEMPLATES_MODEL_ENV,
@@ -30,7 +30,7 @@ import {
 // triggers stays on by default (no override needed), templates/dlq need their opt-in env vars set.
 // This test activates `getLocalAdminSubApps()` alone, deliberately never `defineLocalAdminApp()`
 // (which would additionally register real `/admin/*` REST routes via `defineAdminMetadata()`) —
-// each sub-app resolves its own `TriggersAdminService`/`TemplatesAdminService`/`DLQAdminService`
+// each sub-app resolves its own `TriggersAdminService`/`TemplatesAdminService`/`DlqAdminService`
 // through `@zanix/server`'s DI, scoped by ITS OWN Application name (`admin-triggers`/
 // `admin-templates`/`admin-dlq`), entirely independent of whatever Application the REST
 // controllers register under — so this file never needs a live REST surface to test `operations`,
@@ -297,16 +297,16 @@ Deno.test(
 )
 
 Deno.test(
-  'local admin app: listDlqEntries forwards {options} to DLQAdminService.list()',
+  'local admin app: listDlqEntries forwards {options} to DlqAdminService.list()',
   async () => {
     const calls: unknown[][] = []
     const listStub = stub(
-      DLQAdminService.prototype,
+      DlqAdminService.prototype,
       'list',
       (...args: unknown[]) => (
         calls.push(args),
           Promise.resolve(
-            { docs: ['a'] } as unknown as DLQPaginatedResult,
+            { docs: ['a'] } as unknown as DlqPaginatedResult,
           )
       ),
     )
@@ -321,14 +321,14 @@ Deno.test(
   },
 )
 
-Deno.test('local admin app: getDlqEntry forwards {id} to DLQAdminService.get()', async () => {
+Deno.test('local admin app: getDlqEntry forwards {id} to DlqAdminService.get()', async () => {
   const calls: unknown[][] = []
   const getStub = stub(
-    DLQAdminService.prototype,
+    DlqAdminService.prototype,
     'get',
     (
       ...args: unknown[]
-    ) => (calls.push(args), Promise.resolve({ id: 'entry-1' } as unknown as DLQEntryAttrs)),
+    ) => (calls.push(args), Promise.resolve({ id: 'entry-1' } as unknown as DlqEntryAttrs)),
   )
   try {
     const { handler, ctx } = getOperation('getDlqEntry')
@@ -341,15 +341,15 @@ Deno.test('local admin app: getDlqEntry forwards {id} to DLQAdminService.get()',
 })
 
 Deno.test(
-  'local admin app: pushDlqEntry forwards the input to DLQAdminService.push()',
+  'local admin app: pushDlqEntry forwards the input to DlqAdminService.push()',
   async () => {
     const calls: unknown[][] = []
     const pushStub = stub(
-      DLQAdminService.prototype,
+      DlqAdminService.prototype,
       'push',
       (
         ...args: unknown[]
-      ) => (calls.push(args), Promise.resolve({ id: 'entry-1' } as unknown as DLQEntryAttrs)),
+      ) => (calls.push(args), Promise.resolve({ id: 'entry-1' } as unknown as DlqEntryAttrs)),
     )
     try {
       const { handler, ctx } = getOperation('pushDlqEntry')
@@ -363,15 +363,15 @@ Deno.test(
 )
 
 Deno.test(
-  'local admin app: requeueDlqEntry forwards {id, ...options} to DLQAdminService.requeue()',
+  'local admin app: requeueDlqEntry forwards {id, ...options} to DlqAdminService.requeue()',
   async () => {
     const calls: unknown[][] = []
     const requeueStub = stub(
-      DLQAdminService.prototype,
+      DlqAdminService.prototype,
       'requeue',
       (
         ...args: unknown[]
-      ) => (calls.push(args), Promise.resolve({ id: 'entry-1' } as unknown as DLQEntryAttrs)),
+      ) => (calls.push(args), Promise.resolve({ id: 'entry-1' } as unknown as DlqEntryAttrs)),
     )
     try {
       const { handler, ctx } = getOperation('requeueDlqEntry')
@@ -385,15 +385,15 @@ Deno.test(
 )
 
 Deno.test(
-  'local admin app: discardDlqEntry forwards {id, ...options} to DLQAdminService.discard()',
+  'local admin app: discardDlqEntry forwards {id, ...options} to DlqAdminService.discard()',
   async () => {
     const calls: unknown[][] = []
     const discardStub = stub(
-      DLQAdminService.prototype,
+      DlqAdminService.prototype,
       'discard',
       (
         ...args: unknown[]
-      ) => (calls.push(args), Promise.resolve({ id: 'entry-1' } as unknown as DLQEntryAttrs)),
+      ) => (calls.push(args), Promise.resolve({ id: 'entry-1' } as unknown as DlqEntryAttrs)),
     )
     try {
       const { handler, ctx } = getOperation('discardDlqEntry')
@@ -409,7 +409,7 @@ Deno.test(
 Deno.test('local admin app: removeDlqEntry forwards {id}, reports deleted', async () => {
   const calls: unknown[][] = []
   const removeStub = stub(
-    DLQAdminService.prototype,
+    DlqAdminService.prototype,
     'remove',
     (...args: unknown[]) => (calls.push(args), Promise.resolve()),
   )

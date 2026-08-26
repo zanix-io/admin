@@ -1,24 +1,24 @@
 import type {
-  DLQDiscardOptions,
-  DLQEntryAttrs,
-  DLQListOptions,
-  DLQPaginatedResult,
-  DLQPushInput,
-  DLQRequeueOptions,
-} from '@zanix/database'
+  DlqDiscardOptions,
+  DlqEntryAttrs,
+  DlqListOptions,
+  DlqPaginatedResult,
+  DlqPushInput,
+  DlqRequeueOptions,
+} from '@zanix/datamaster/dlq'
 
 import { ADMIN_PROTOCOL_HEADER, RestClient } from '@zanix/server'
 import { ADMIN_PROTOCOL_VERSION } from 'utils/constants.ts'
 
 /**
- * The subset of {@link DLQListOptions} `GET /admin/dlq` actually accepts as query params —
- * `sort`/`filter` are deliberately left off, mirroring `@zanix/datamaster`'s own `ListDLQEntriesRTO`
+ * The subset of {@link DlqListOptions} `GET /admin/dlq` actually accepts as query params —
+ * `sort`/`filter` are deliberately left off, mirroring `@zanix/datamaster`'s own `ListDlqEntriesRTO`
  * (the RTO validating this exact route server-side): a plain query string can't carry either
  * shape's full expressiveness. A caller that needs `sort`/`filter` already has direct access to
- * `DLQProvider`/`DLQAdminService` without going through HTTP.
+ * `DlqProvider`/`DlqAdminService` without going through HTTP.
  */
 export type DlqListQuery = Pick<
-  DLQListOptions,
+  DlqListOptions,
   'processType' | 'status' | 'origin' | 'page' | 'limit'
 >
 
@@ -59,7 +59,7 @@ function buildDlqListQuery(options: DlqListQuery): string {
  * contract for any OTHER direct caller that wants the full paginated collection (not Discovery's
  * narrower `'pending'`/`'claimed'`/`'failed'`-only snapshot) from a single named service.
  *
- * @requires @zanix/database
+ * @requires @zanix/datamaster/dlq
  *
  * @example
  * ```ts
@@ -90,18 +90,18 @@ export class DlqAdminClient extends RestClient {
    * to `options`' own filters/paging), unlike `DlqAggregator.list()`'s narrower Discovery snapshot.
    * See {@link DlqListQuery} for which filters this route actually accepts.
    */
-  public list(options: DlqListQuery = {}): Promise<DLQPaginatedResult> {
-    return this.http.get<DLQPaginatedResult>(`/admin/dlq${buildDlqListQuery(options)}`)
+  public list(options: DlqListQuery = {}): Promise<DlqPaginatedResult> {
+    return this.http.get<DlqPaginatedResult>(`/admin/dlq${buildDlqListQuery(options)}`)
   }
 
   /** Gets a single DLQ entry by `id`. */
-  public get(id: string): Promise<DLQEntryAttrs> {
-    return this.http.get<DLQEntryAttrs>(`/admin/dlq/${encodeURIComponent(id)}`)
+  public get(id: string): Promise<DlqEntryAttrs> {
+    return this.http.get<DlqEntryAttrs>(`/admin/dlq/${encodeURIComponent(id)}`)
   }
 
   /** Pushes a new DLQ entry. */
-  public push(input: DLQPushInput): Promise<DLQEntryAttrs> {
-    return this.http.post<DLQEntryAttrs>('/admin/dlq', {
+  public push(input: DlqPushInput): Promise<DlqEntryAttrs> {
+    return this.http.post<DlqEntryAttrs>('/admin/dlq', {
       body: JSON.stringify(input),
     })
   }
@@ -109,9 +109,9 @@ export class DlqAdminClient extends RestClient {
   /** Requeues a DLQ entry, moving it back to `'pending'`. */
   public requeue(
     id: string,
-    options?: DLQRequeueOptions,
-  ): Promise<DLQEntryAttrs> {
-    return this.http.post<DLQEntryAttrs>(
+    options?: DlqRequeueOptions,
+  ): Promise<DlqEntryAttrs> {
+    return this.http.post<DlqEntryAttrs>(
       `/admin/dlq/${encodeURIComponent(id)}/requeue`,
       { body: JSON.stringify(options ?? {}) },
     )
@@ -120,9 +120,9 @@ export class DlqAdminClient extends RestClient {
   /** Discards a DLQ entry, permanently closing it. */
   public discard(
     id: string,
-    options?: DLQDiscardOptions,
-  ): Promise<DLQEntryAttrs> {
-    return this.http.post<DLQEntryAttrs>(
+    options?: DlqDiscardOptions,
+  ): Promise<DlqEntryAttrs> {
+    return this.http.post<DlqEntryAttrs>(
       `/admin/dlq/${encodeURIComponent(id)}/discard`,
       { body: JSON.stringify(options ?? {}) },
     )

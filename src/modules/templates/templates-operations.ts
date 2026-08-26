@@ -1,13 +1,13 @@
 import type { OperationDeclaration } from '@zanix/app'
 import type {
   CreateTemplateInput,
-  Notifiers,
   UpdateTemplateInput,
   ZanixTemplateAttrs,
-} from '@zanix/notifications'
+} from '@zanix/notifications/templates-types'
+import type { NotifiersLike } from '../lazy/notifications-shim.ts'
 
 import { resolveTarget } from '@zanix/app/runtime'
-import { TemplatesAdminService } from '@zanix/notifications'
+import { resolveTemplatesAdminService } from '../lazy/notifications-shim.ts'
 
 /**
  * `TemplatesAdminService`'s mutating methods take an `updatedBy` audit-trail identity — normally
@@ -25,12 +25,20 @@ const OPERATION_UPDATED_BY = 'zanix-operation'
  * Templates `operations` for one Zanix App, scoped to `appName` — reused as-is by BOTH
  * `defineAdminHubApp` and `defineLocalAdminApp`: unlike Triggers (a proxy on the hub side, real
  * persisted data on the local side — genuinely different business logic per side), Templates is
- * owned DIRECTLY by {@link TemplatesAdminService} in both deployments (the hub's own `/templates`
+ * owned DIRECTLY by `TemplatesAdminService` in both deployments (the hub's own `/templates`
  * and a business service's own `/admin/templates` both call the exact same class — see
  * `@zanix/notifications/templates-api`'s `templates.handler.ts`'s own doc) — so the operations
  * built here are structurally identical
  * either way, differing only in which Application (`appName`) they resolve `TemplatesAdminService`
  * against via `resolveTarget`.
+ *
+ * `TemplatesAdminService` itself is resolved LAZILY (`resolveTemplatesAdminService`, see
+ * `specifiers.ts`'s own doc) — `@zanix/notifications` reaches Handlebars unconditionally from
+ * every subpath, so a deployment with templates disabled must never resolve it merely because this
+ * module is reachable. Every handler below `await`s the resolution before calling `resolveTarget`,
+ * which changes nothing observable: `resolveTarget`'s own DI lookup was already synchronous-fast,
+ * not a source of real latency, so gating it behind one microtask has no practical cost for a
+ * deployment that DOES use templates.
  *
  * Only `listTemplates`/`getTemplate` (read-only) opt into `mcp` — giving an agent unrestricted
  * write access to notification templates is a real risk (a misconfigured template can break an
@@ -41,15 +49,19 @@ export function buildTemplatesOperations(
 ): Record<string, OperationDeclaration> {
   return {
     listTemplates: {
-      handler: () => resolveTarget(appName, TemplatesAdminService).list(),
+      handler: async () => {
+        const TemplatesAdminService = await resolveTemplatesAdminService()
+        return resolveTarget(appName, TemplatesAdminService).list()
+      },
       mcp: { description: 'Lists registered notification templates.' },
     },
     getTemplate: {
-      handler: (payload) => {
+      handler: async (payload) => {
         const { channel, name } = payload as {
-          channel: Notifiers
+          channel: NotifiersLike
           name: string
         }
+        const TemplatesAdminService = await resolveTemplatesAdminService()
         return resolveTarget(appName, TemplatesAdminService).get(channel, name)
       },
       mcp: {
@@ -62,8 +74,9 @@ export function buildTemplatesOperations(
       },
     },
     createTemplate: {
-      handler: (payload): Promise<ZanixTemplateAttrs> => {
+      handler: async (payload): Promise<ZanixTemplateAttrs> => {
         const input = payload as CreateTemplateInput
+        const TemplatesAdminService = await resolveTemplatesAdminService()
         return resolveTarget(appName, TemplatesAdminService).create(
           input,
           OPERATION_UPDATED_BY,
@@ -71,10 +84,11 @@ export function buildTemplatesOperations(
       },
     },
     updateTemplate: {
-      handler: (payload): Promise<ZanixTemplateAttrs> => {
+      handler: async (payload): Promise<ZanixTemplateAttrs> => {
         const { channel, name, ...changes } = payload as
-          & { channel: Notifiers; name: string }
+          & { channel: NotifiersLike; name: string }
           & UpdateTemplateInput
+        const TemplatesAdminService = await resolveTemplatesAdminService()
         return resolveTarget(appName, TemplatesAdminService).update(
           channel,
           name,
@@ -86,9 +100,10 @@ export function buildTemplatesOperations(
     removeTemplate: {
       handler: async (payload) => {
         const { channel, name } = payload as {
-          channel: Notifiers
+          channel: NotifiersLike
           name: string
         }
+        const TemplatesAdminService = await resolveTemplatesAdminService()
         await resolveTarget(appName, TemplatesAdminService).remove(
           channel,
           name,

@@ -10,7 +10,7 @@ import { BaseRTO, IsString } from '@zanix/validator'
  * instead of a hand-rolled copy that could drift — same pattern `triggers.rto.ts` already
  * establishes for `CreateTriggerRTO`/`UpdateTriggerRTO`.
  */
-export { DiscardDLQEntryRTO, PushDLQEntryRTO, RequeueDLQEntryRTO } from '@zanix/datamaster/dlq-api'
+export { DiscardDlqEntryRTO, PushDlqEntryRTO, RequeueDlqEntryRTO } from '@zanix/datamaster/dlq-api'
 
 /** Route params for a service-scoped operation with no entry `id` yet (`POST /dlq/:serviceId`).
  * Mirrors `TriggerServiceParamsRTO`'s own role. */

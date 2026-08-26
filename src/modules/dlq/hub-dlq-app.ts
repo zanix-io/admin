@@ -1,5 +1,5 @@
 import type { OperationDeclaration, ZanixAppDefinition } from '@zanix/app'
-import type { DLQDiscardOptions, DLQPushInput, DLQRequeueOptions } from '@zanix/database'
+import type { DlqDiscardOptions, DlqPushInput, DlqRequeueOptions } from '@zanix/datamaster/dlq'
 
 import { defineZanixApp } from '@zanix/app'
 import { ADMIN_HUB_DLQ_APPLICATION } from '../../utils/constants.ts'
@@ -50,7 +50,7 @@ export const hubDlqOperations: Record<string, OperationDeclaration> = {
     handler: (payload) => {
       const { serviceId, ...input } = payload as
         & { serviceId: string }
-        & DLQPushInput
+        & DlqPushInput
       return getDlqAggregator().push(serviceId, input)
     },
   },
@@ -58,7 +58,7 @@ export const hubDlqOperations: Record<string, OperationDeclaration> = {
     handler: (payload) => {
       const { serviceId, id, ...options } = payload as
         & { serviceId: string; id: string }
-        & DLQRequeueOptions
+        & DlqRequeueOptions
       return getDlqAggregator().requeue(serviceId, id, options)
     },
   },
@@ -66,7 +66,7 @@ export const hubDlqOperations: Record<string, OperationDeclaration> = {
     handler: (payload) => {
       const { serviceId, id, ...options } = payload as
         & { serviceId: string; id: string }
-        & DLQDiscardOptions
+        & DlqDiscardOptions
       return getDlqAggregator().discard(serviceId, id, options)
     },
   },

@@ -16,7 +16,7 @@ import { activateApps, bootstrapAppServer, deactivateApps } from '@zanix/app/run
 
 import logger from '@zanix/logger'
 import { ADMIN_HUB_APPLICATION } from '../utils/constants.ts'
-import type { TemplatesControllerOptions } from '@zanix/notifications/templates-api'
+import type { TemplatesControllerOptions } from '@zanix/notifications/templates-types'
 import type { TriggersControllerOptions } from './triggers/triggers.handler.ts'
 import type { DlqControllerOptions } from './dlq/dlq.handler.ts'
 import { checkServiceRegistryReachability } from './registry/reachability.ts'
@@ -86,6 +86,24 @@ export type StartOptions = BootstrapServerOptions & {
     | false
     | (DlqControllerOptions & { application?: AdminStartApplication })
   /**
+   * Opt-in — composes `POST /admin/service-token` (machine-to-machine credential exchange, via
+   * `createServiceExchangeController()`) under the SAME {@link ADMIN_HUB_APPLICATION} this hub's own
+   * `/triggers`/`/templates`/`/dlq`/`/registry` already register under, so all four land on the
+   * exact same base URL/port with no anchoring, no second Application, and no manual composition.
+   * `false`/omitted (the default) keeps today's exact behavior — this endpoint stays uncomposed,
+   * same as before this option existed.
+   *
+   * **Not a substitute for, and not meant to be combined with, anchoring
+   * (`ADMIN_SERVER_ID`/`ADMIN_HUB_SERVER_ID`) for the same purpose** — anchoring exists so
+   * `Zanix.start()` and `ZanixAdminHub.start()` can coexist as two independent bootstrap sequences
+   * sharing one process/port (a distinct, edge-case scenario); it does not, by itself, register
+   * `/admin/service-token` under THIS hub's own base URL. `serviceToken: true` is the direct answer
+   * to "I want `/admin/service-token` reachable from the same base URL as this hub's other routes."
+   * See {@link AdminHubAppOptions.serviceToken}'s own doc (`admin-hub-app.ts`) for the full
+   * rationale and the gap this closes.
+   */
+  serviceToken?: boolean
+  /**
    * Opt-in, fire-and-forget reachability check against every entry in the installed
    * `ServiceRegistry` (see {@link checkServiceRegistryReachability}) — catches a stale/typo'd
    * `adminBaseUrl` at startup instead of at first real use (`TriggersAggregator`'s calls have no
@@ -142,6 +160,11 @@ export type StartOptions = BootstrapServerOptions & {
  * — see the `wantsPublicRoute` check in the implementation for why this isn't attempted
  * unconditionally.
  *
+ * `serviceToken: true` additionally composes `POST /admin/service-token` under this SAME
+ * `ADMIN_HUB_APPLICATION` — `false`/omitted (the default) composes none, exactly today's behavior.
+ * See {@link StartOptions.serviceToken}'s own doc for the gap this closes and why it's deliberately
+ * NOT the same mechanism as anchoring.
+ *
  * Only ever starts REST servers (the triggers/templates/dlq routes are REST-only) — a `graphql`/
  * `socket` entry in `options` is accepted (forwarded as-is to `bootstrapServers`) but has nothing
  * of this package's own to serve.
@@ -159,8 +182,9 @@ export type StartOptions = BootstrapServerOptions & {
  * this handler forcing it.
  *
  * @param options - `triggers`/`templates`/`dlq` configure (or, as `false`, skip) each built-in
- * controller; everything else is forwarded as-is to `@zanix/server`'s `bootstrapServers` (port,
- * cors, gzip, `onCreate`, etc. — see its own docs for the full shape).
+ * controller; `serviceToken: true` opts into composing `POST /admin/service-token` alongside them
+ * (`false`/omitted by default); everything else is forwarded as-is to `@zanix/server`'s
+ * `bootstrapServers` (port, cors, gzip, `onCreate`, etc. — see its own docs for the full shape).
  * @returns The `ServerID`s of whatever servers were actually started.
  */
 export const start = async (
@@ -226,6 +250,7 @@ async function startSequence(options: StartOptions): Promise<ServerID[]> {
     triggers = {},
     templates = {},
     dlq = {},
+    serviceToken = false,
     validateRegistry = false,
     auth,
     ...serverOptions
@@ -243,7 +268,7 @@ async function startSequence(options: StartOptions): Promise<ServerID[]> {
   // of these apps declare one.
   const hubSubApps = getAdminHubSubApps({ triggers, templates, dlq })
   activated = await activateApps([
-    defineAdminHubApp({ triggers, templates, dlq, auth }),
+    defineAdminHubApp({ triggers, templates, dlq, serviceToken, auth }),
     ...hubSubApps,
   ])
 

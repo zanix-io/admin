@@ -315,7 +315,7 @@ service's CRUD API. Authentication is the same pluggable seam (`clientFactory`/
 automatically alongside `TriggersAggregator`'s.
 
 Deliberately excludes the lease-fenced worker-only primitives (`claim`/`release`/`complete`/`fail`)
-— same reasoning `DLQAdminService`'s own JSDoc gives.
+— same reasoning `DlqAdminService`'s own JSDoc gives.
 
 See [`docs/dlq-aggregator.md`](./docs/dlq-aggregator.md) for the full method/route reference.
 

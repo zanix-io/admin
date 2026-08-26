@@ -1,11 +1,11 @@
 import { assertEquals } from '@std/assert'
 import { classValidation } from '@zanix/validator'
 import {
-  DiscardDLQEntryRTO,
+  DiscardDlqEntryRTO,
   DlqServiceEntryParamsRTO,
   DlqServiceParamsRTO,
-  PushDLQEntryRTO,
-  RequeueDLQEntryRTO,
+  PushDlqEntryRTO,
+  RequeueDlqEntryRTO,
 } from 'modules/dlq/rtos/dlq.rto.ts'
 
 Deno.test('DlqServiceParamsRTO validates a plain "serviceId" string', async () => {
@@ -23,9 +23,9 @@ Deno.test('DlqServiceEntryParamsRTO validates "serviceId" and "id"', async () =>
 })
 
 Deno.test({
-  name: 'PushDLQEntryRTO validates processType/origin/payload/error, passes payload/error as-is',
+  name: 'PushDlqEntryRTO validates processType/origin/payload/error, passes payload/error as-is',
   fn: async () => {
-    const rto = await classValidation(PushDLQEntryRTO, {
+    const rto = await classValidation(PushDlqEntryRTO, {
       processType: 'payment.process',
       origin: 'billing',
       payload: { orderId: 'o-1' },
@@ -38,22 +38,22 @@ Deno.test({
   },
 })
 
-Deno.test('RequeueDLQEntryRTO leaves resetAttempts undefined when omitted', async () => {
-  const rto = await classValidation(RequeueDLQEntryRTO, {})
+Deno.test('RequeueDlqEntryRTO leaves resetAttempts undefined when omitted', async () => {
+  const rto = await classValidation(RequeueDlqEntryRTO, {})
   assertEquals(rto.resetAttempts, undefined)
 })
 
-Deno.test('RequeueDLQEntryRTO validates resetAttempts when given', async () => {
-  const rto = await classValidation(RequeueDLQEntryRTO, { resetAttempts: true })
+Deno.test('RequeueDlqEntryRTO validates resetAttempts when given', async () => {
+  const rto = await classValidation(RequeueDlqEntryRTO, { resetAttempts: true })
   assertEquals(rto.resetAttempts, true)
 })
 
-Deno.test('DiscardDLQEntryRTO validates reason when given', async () => {
-  const rto = await classValidation(DiscardDLQEntryRTO, { reason: 'stale' })
+Deno.test('DiscardDlqEntryRTO validates reason when given', async () => {
+  const rto = await classValidation(DiscardDlqEntryRTO, { reason: 'stale' })
   assertEquals(rto.reason, 'stale')
 })
 
-Deno.test('DiscardDLQEntryRTO leaves reason undefined when omitted', async () => {
-  const rto = await classValidation(DiscardDLQEntryRTO, {})
+Deno.test('DiscardDlqEntryRTO leaves reason undefined when omitted', async () => {
+  const rto = await classValidation(DiscardDlqEntryRTO, {})
   assertEquals(rto.reason, undefined)
 })

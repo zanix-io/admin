@@ -1,5 +1,5 @@
 import type { HandlerContext } from '@zanix/server'
-import type { DLQEntryAttrs } from '@zanix/database'
+import type { DlqEntryAttrs } from '@zanix/datamaster/dlq'
 
 import { Controller, Delete, Get, Post, ZanixController } from '@zanix/server'
 import { AuthTokenValidation } from '@zanix/auth'
@@ -8,11 +8,11 @@ import { ADMIN_VERSION_PROTOCOL } from '../protocol/version-protocol.ts'
 import { getDlqAggregator } from './dlq.aggregator.ts'
 import type { AggregatedDlqEntry } from './dlq.aggregator.ts'
 import {
-  DiscardDLQEntryRTO,
+  DiscardDlqEntryRTO,
   DlqServiceEntryParamsRTO,
   DlqServiceParamsRTO,
-  PushDLQEntryRTO,
-  RequeueDLQEntryRTO,
+  PushDlqEntryRTO,
+  RequeueDlqEntryRTO,
 } from './rtos/dlq.rto.ts'
 
 const REQUIRED_ROLE = [ADMIN_ROLE, ADMIN_DLQ_ROLE]
@@ -33,25 +33,25 @@ export interface DlqControllerInstance extends ZanixController {
   /** `GET /:serviceId/:id` — proxies to that specific registered service's own DLQ entry. */
   get(
     ctx: HandlerContext<{ params: DlqServiceEntryParamsRTO }>,
-  ): Promise<DLQEntryAttrs>
+  ): Promise<DlqEntryAttrs>
   /** `POST /:serviceId` — pushes a new DLQ entry onto that specific registered service. */
   push(
     ctx: HandlerContext<
-      { body: PushDLQEntryRTO; params: DlqServiceParamsRTO }
+      { body: PushDlqEntryRTO; params: DlqServiceParamsRTO }
     >,
-  ): Promise<DLQEntryAttrs>
+  ): Promise<DlqEntryAttrs>
   /** `POST /:serviceId/:id/requeue` — requeues a DLQ entry on that specific registered service. */
   requeue(
     ctx: HandlerContext<
-      { body: RequeueDLQEntryRTO; params: DlqServiceEntryParamsRTO }
+      { body: RequeueDlqEntryRTO; params: DlqServiceEntryParamsRTO }
     >,
-  ): Promise<DLQEntryAttrs>
+  ): Promise<DlqEntryAttrs>
   /** `POST /:serviceId/:id/discard` — discards a DLQ entry on that specific registered service. */
   discard(
     ctx: HandlerContext<
-      { body: DiscardDLQEntryRTO; params: DlqServiceEntryParamsRTO }
+      { body: DiscardDlqEntryRTO; params: DlqServiceEntryParamsRTO }
     >,
-  ): Promise<DLQEntryAttrs>
+  ): Promise<DlqEntryAttrs>
   /** `DELETE /:serviceId/:id` — removes a DLQ entry from that specific registered service. */
   remove(
     ctx: HandlerContext<{ params: DlqServiceEntryParamsRTO }>,
@@ -71,7 +71,7 @@ export interface DlqControllerInstance extends ZanixController {
  * (see `@zanix/server`'s `docs/applications.md`) this route belongs to is decided by whichever
  * `defineApplication(...)` scope is active when this call runs, not by an option here.
  *
- * @requires @zanix/database
+ * @requires @zanix/datamaster/dlq
  * @requires @zanix/auth
  */
 export function createDlqController(
@@ -91,21 +91,21 @@ export function createDlqController(
     @AuthTokenValidation({ permissions: REQUIRED_ROLE, type: AUTH_TYPES })
     public get(
       ctx: HandlerContext<{ params: DlqServiceEntryParamsRTO }>,
-    ): Promise<DLQEntryAttrs> {
+    ): Promise<DlqEntryAttrs> {
       const { serviceId, id } = ctx.payload.params
       return getDlqAggregator().get(serviceId, id)
     }
 
     @Post(':serviceId', {
-      Body: PushDLQEntryRTO,
+      Body: PushDlqEntryRTO,
       Params: DlqServiceParamsRTO,
     })
     @AuthTokenValidation({ permissions: REQUIRED_ROLE, type: AUTH_TYPES })
     public push(
       ctx: HandlerContext<
-        { body: PushDLQEntryRTO; params: DlqServiceParamsRTO }
+        { body: PushDlqEntryRTO; params: DlqServiceParamsRTO }
       >,
-    ): Promise<DLQEntryAttrs> {
+    ): Promise<DlqEntryAttrs> {
       const { serviceId } = ctx.payload.params
       const { processType, origin, processId, payload, error, maxAttempts, metadata } =
         ctx.payload.body
@@ -121,15 +121,15 @@ export function createDlqController(
     }
 
     @Post(':serviceId/:id/requeue', {
-      Body: RequeueDLQEntryRTO,
+      Body: RequeueDlqEntryRTO,
       Params: DlqServiceEntryParamsRTO,
     })
     @AuthTokenValidation({ permissions: REQUIRED_ROLE, type: AUTH_TYPES })
     public requeue(
       ctx: HandlerContext<
-        { body: RequeueDLQEntryRTO; params: DlqServiceEntryParamsRTO }
+        { body: RequeueDlqEntryRTO; params: DlqServiceEntryParamsRTO }
       >,
-    ): Promise<DLQEntryAttrs> {
+    ): Promise<DlqEntryAttrs> {
       const { serviceId, id } = ctx.payload.params
       return getDlqAggregator().requeue(serviceId, id, {
         resetAttempts: ctx.payload.body.resetAttempts,
@@ -137,15 +137,15 @@ export function createDlqController(
     }
 
     @Post(':serviceId/:id/discard', {
-      Body: DiscardDLQEntryRTO,
+      Body: DiscardDlqEntryRTO,
       Params: DlqServiceEntryParamsRTO,
     })
     @AuthTokenValidation({ permissions: REQUIRED_ROLE, type: AUTH_TYPES })
     public discard(
       ctx: HandlerContext<
-        { body: DiscardDLQEntryRTO; params: DlqServiceEntryParamsRTO }
+        { body: DiscardDlqEntryRTO; params: DlqServiceEntryParamsRTO }
       >,
-    ): Promise<DLQEntryAttrs> {
+    ): Promise<DlqEntryAttrs> {
       const { serviceId, id } = ctx.payload.params
       return getDlqAggregator().discard(serviceId, id, {
         reason: ctx.payload.body.reason,

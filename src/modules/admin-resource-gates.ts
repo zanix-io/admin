@@ -1,8 +1,9 @@
-import {
-  isDlqResourceEnabled as datamasterIsDlqResourceEnabled,
-  isTriggersResourceEnabled as datamasterIsTriggersResourceEnabled,
-} from '@zanix/database'
-import { isTemplatesResourceEnabled as notificationsIsTemplatesResourceEnabled } from '@zanix/notifications'
+import { isDlqResourceEnabled as datamasterIsDlqResourceEnabled } from '@zanix/datamaster/dlq'
+import { isTriggersResourceEnabled as datamasterIsTriggersResourceEnabled } from '@zanix/datamaster/database'
+// `@zanix/notifications/templates-env` — not the bare root — confirmed free of Handlebars/Zod
+// (see `lazy/specifiers.ts`'s own doc); this is the one real, static, non-lazy import of anything
+// notifications-related in this file, deliberate now that the narrow subpath exists.
+import { isTemplatesResourceEnabled as notificationsIsTemplatesResourceEnabled } from '@zanix/notifications/templates-env'
 
 /**
  * The single source of truth for "is this resource configured in this deployment" — one function
@@ -13,7 +14,7 @@ import { isTemplatesResourceEnabled as notificationsIsTemplatesResourceEnabled }
  * unconditionally while their REST controllers were already opt-in).
  *
  * Each is a thin re-export/adapter over the real owner package's own `isXResourceEnabled()` —
- * `@zanix/datamaster` (aliased `@zanix/database` in this package's own imports) owns triggers/dlq,
+ * `@zanix/datamaster` (via its `/database`/`/dlq` subpaths) owns triggers/dlq,
  * `@zanix/notifications` owns templates — not this package's own derived logic. This file exists
  * so `metadata.ts`/`local-admin-app.ts` share ONE import surface with a stable name/shape, even
  * though the two owner packages don't (and shouldn't) share one themselves — see each function's
@@ -34,7 +35,7 @@ export const isTriggersResourceEnabled: () => boolean = datamasterIsTriggersReso
 
 /** DLQ is opt-in — re-exported as-is from `@zanix/datamaster`'s own `isDlqResourceEnabled()`
  * (`true` once `DLQ_MODEL_NAME` is set; see that function's own doc for the known
- * "doesn't guarantee `registerDLQModel()` ran" gap this inherits, not introduces). */
+ * "doesn't guarantee `registerDlqModel()` ran" gap this inherits, not introduces). */
 export const isDlqResourceEnabled: () => boolean = datamasterIsDlqResourceEnabled
 
 /** Templates is opt-in — `@zanix/notifications`'s own `isTemplatesResourceEnabled(mode)` takes an

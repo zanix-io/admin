@@ -1,5 +1,5 @@
 import { assertEquals } from 'jsr:@std/assert@^1.0.15'
-import { DLQ_MODEL_ENV } from '@zanix/database'
+import { DLQ_MODEL_ENV } from '@zanix/datamaster/dlq'
 import { TEMPLATES_BACKEND_ENV } from '@zanix/notifications'
 import {
   isDlqResourceEnabled,

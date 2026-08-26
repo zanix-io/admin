@@ -1,5 +1,5 @@
 import type { HandlerContext } from '@zanix/server'
-import type { TriggersModelAttrs } from '@zanix/database'
+import type { TriggersModelAttrs } from '@zanix/datamaster/database'
 
 import { Controller, Delete, Get, Post, Put, ZanixController } from '@zanix/server'
 import { AuthTokenValidation } from '@zanix/auth'
@@ -68,7 +68,7 @@ export interface TriggersControllerInstance extends ZanixController {
  * rebindable via `ADMIN_TRIGGERS_APPLICATION`), this aggregator has no such env var override —
  * only `ZanixAdminHub.start()` composes it, always explicitly.
  *
- * @requires @zanix/database
+ * @requires @zanix/datamaster/database
  * @requires @zanix/auth
  */
 export function createTriggersController(

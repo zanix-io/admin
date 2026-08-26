@@ -2,7 +2,7 @@ import { assert, assertEquals } from '@std/assert'
 import { stub } from '@std/testing/mock'
 import { bootstrapServers, DEFAULT_APPLICATION, webServerManager } from '@zanix/server'
 import { TEMPLATES_BACKEND_ENV, TEMPLATES_MODEL_ENV } from '@zanix/notifications'
-import { DLQ_MODEL_ENV } from '@zanix/database'
+import { DLQ_MODEL_ENV } from '@zanix/datamaster/dlq'
 import {
   ADMIN_DLQ_APPLICATION_ENV,
   ADMIN_TEMPLATES_APPLICATION_ENV,

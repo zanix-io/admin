@@ -14,7 +14,7 @@ Deno.test({
   sanitizeOps: false,
   sanitizeResources: false,
   name:
-    "ZanixAdminHub.start() registers /triggers, /templates, /dlq and /registry behind auth, bound to 'admin-hub' by default",
+    "ZanixAdminHub.start() registers /triggers, /templates, /dlq and /registry behind auth, bound to 'admin-hub' by default, and never registers /admin/service-token unless serviceToken: true is passed",
   fn: async () => {
     // There is no auto-generated anchored id anymore — set one explicitly so all three controllers
     // (defaulting to the `'admin-hub'` Application) are reachable at a known, id-prefixed address.
@@ -56,6 +56,13 @@ Deno.test({
     const registry = await fetch(`${baseUrl}/registry/list`)
     assertEquals(registry.status, 401)
     await registry.body?.cancel()
+
+    // `serviceToken` defaults to `false`/omitted — `/admin/service-token` must genuinely NOT exist
+    // (404, not just unauthenticated) unless explicitly opted into (see `start-service-token.test.ts`
+    // for the opt-in case) — zero regression from this option's own addition.
+    const serviceToken = await fetch(`${baseUrl}/admin/service-token`, { method: 'POST' })
+    assertEquals(serviceToken.status, 404)
+    await serviceToken.body?.cancel()
 
     Deno.env.delete('ADMIN_HUB_SERVER_ID')
     await ZanixAdminHub.stop()

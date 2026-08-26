@@ -5,7 +5,13 @@ import { defineZanixApp } from '@zanix/app'
 import type { DEFAULT_APPLICATION } from '@zanix/server'
 import { ProgramModule } from '@zanix/server'
 import { jwtValidationGuard } from '@zanix/auth'
-import type { TemplatesControllerOptions } from '@zanix/notifications/templates-api'
+import type { TemplatesControllerOptions } from '@zanix/notifications/templates-types'
+import {
+  AUTH_CORE_SPECIFIER,
+  DATAMASTER_CORE_SPECIFIER,
+  NOTIFICATIONS_CORE_SPECIFIER,
+  NOTIFICATIONS_TEMPLATES_API_SPECIFIER,
+} from './lazy/specifiers.ts'
 import {
   ADMIN_AUTH_TYPES,
   ADMIN_HUB_APPLICATION,
@@ -47,6 +53,14 @@ const HUB_SUB_APP_ENTRIES: Array<
   { factory: defineHubTemplatesApp, enabled: (options) => options.templates !== false },
   { factory: defineHubDlqApp, enabled: (options) => options.dlq !== false },
 ]
+
+// `serviceToken` (below) is deliberately NOT a fourth entry here — this table exists exclusively
+// for a resource's `operations`/`mcp` sub-app (its own physically-separate `ZanixAppDefinition`,
+// `routes: false`), never for an arbitrary REST-only controller under `ADMIN_HUB_APPLICATION`.
+// `createServiceExchangeController()` declares no `operations`/`mcp` surface of its own to extract —
+// it's composed as one more {@link AdminHubModuleEntry} in `defineAdminHubMetadata`'s own table
+// instead (below), the SAME mechanism `metadata.ts`'s local-side `defineAdminMetadata` already uses
+// for this exact controller, just gated by an opt-in flag instead of being unconditional.
 
 /** The subset of {@link AdminHubAppOptions} that decides which hub sub-app
  * {@link getAdminHubSubApps} composes — same `false`-to-skip meaning those three options already
@@ -112,6 +126,33 @@ export interface AdminHubAppOptions {
   dlq?:
     | false
     | (DlqControllerOptions & { application?: AdminStartApplication })
+  /**
+   * Opt-in — composes `createServiceExchangeController()` (`POST /admin/service-token`, machine-
+   * to-machine credential exchange) directly under {@link ADMIN_HUB_APPLICATION}, the SAME
+   * Application `/triggers`/`/templates`/`/dlq`/`/registry` already register under. `false`/omitted
+   * (the default) keeps today's exact behavior — this hub composes no service-token endpoint at all,
+   * same as before this option existed.
+   *
+   * This exists to close a real gap: without it, a caller wanting `/admin/service-token` reachable
+   * under the SAME base URL as this hub's own routes had no official way to get it — only
+   * `@zanix/core`'s `Zanix.start({ admin: true })`/`defineLocalAdminApp()` compose that controller,
+   * under the DIFFERENT `ADMIN_APPLICATION` (a business service's own local admin surface, not this
+   * hub's). Manually calling `createServiceExchangeController()` yourself inside your own
+   * `ProgramModule.defineApplication(ADMIN_HUB_APPLICATION, ...)` scope remains equally valid — this
+   * option is a thin convenience over exactly that, with no behavior of its own beyond it.
+   *
+   * **Not meant to be combined with anchoring (`ADMIN_SERVER_ID`/`ADMIN_HUB_SERVER_ID`) for the
+   * SAME purpose.** Anchoring exists so `Zanix.start()` and `ZanixAdminHub.start()` can coexist as
+   * two independent bootstrap sequences sharing one process/port (a distinct, edge-case scenario) —
+   * it does not, by itself, put `/admin/service-token` under this hub's own base URL, since that
+   * controller still only ever registers where `Zanix.start({ admin: true })` composes it
+   * (`ADMIN_APPLICATION`). `serviceToken: true` IS the answer to "I want `/admin/service-token`
+   * under my hub's own single base URL, one port, no anchoring, no second Application, no proxy."
+   * Reach for both only if you genuinely need two independent bootstrap sequences in the same
+   * process AND a service-token endpoint on this hub's side specifically — not as two ways to solve
+   * the same single-base-URL problem.
+   */
+  serviceToken?: boolean
   /** See `StartOptions.auth`'s own doc (`start.ts`) for the full behavior this installs. */
   auth?: ServiceAuthClientOptions
 }
@@ -179,13 +220,16 @@ async function registerAdminHubModules(
  *
  * Also always registers `GET /registry` (`createRegistryController`) — read-only, reflecting the
  * same `ServiceRegistry` instance this app installs below, with no `options.registry` toggle to
- * disable it (see `createRegistryController`'s own doc for why).
+ * disable it (see `createRegistryController`'s own doc for why). Optionally also registers
+ * `POST /admin/service-token` (`createServiceExchangeController`) when `options.serviceToken` is
+ * `true` — `false`/omitted by default, so this stays exactly today's behavior unless explicitly
+ * opted into (see {@link AdminHubAppOptions.serviceToken}'s own doc).
  *
  * A factory, not a pre-built constant, because — unlike a typical Zanix App — which
  * controllers/Application/credentials this one registers is a per-deployment decision
- * (`triggers`/`templates`/`dlq`/`auth`), not fixed at author time; same pattern `@zanix/space`'s own
- * `defineSpaceApp()` already establishes for a manifest whose shape depends on caller-supplied
- * options.
+ * (`triggers`/`templates`/`dlq`/`serviceToken`/`auth`), not fixed at author time; same pattern
+ * `@zanix/space`'s own `defineSpaceApp()` already establishes for a manifest whose shape depends on
+ * caller-supplied options.
  *
  * Declares one dependency, `registry` (type `'service-registry'`, registered by this package's own
  * `./registry/resource-type.ts` side-effect import above) — the same {@link ServiceRegistry}
@@ -209,7 +253,7 @@ async function registerAdminHubModules(
 export function defineAdminHubApp(
   options: AdminHubAppOptions = {},
 ): ZanixAppDefinition {
-  const { triggers = {}, templates = {}, dlq = {}, auth } = options
+  const { triggers = {}, templates = {}, dlq = {}, serviceToken = false, auth } = options
 
   return defineZanixApp({
     name: ADMIN_HUB_APPLICATION,
@@ -280,7 +324,7 @@ export function defineAdminHubApp(
         )
       }
 
-      await defineAdminHubMetadata(triggers, templates, dlq)
+      await defineAdminHubMetadata(triggers, templates, dlq, serviceToken)
     },
   })
 }
@@ -295,8 +339,9 @@ export function defineAdminHubApp(
  *   need, and the `TemplateProvider` + templates model `TemplatesAdminService` reads through.
  * - Every hub module ({@link AdminHubModuleEntry}) this deployment enabled — today `triggers`/
  *   `templates`/`dlq`, via {@link registerAdminHubModules}, plus `registry` (always enabled, no
- *   `false` entry — see `createRegistryController`'s own doc). `start.ts`'s own `bootstrapAppServer`/
- *   `bootstrapServers` calls only ever serve what's registered here.
+ *   `false` entry — see `createRegistryController`'s own doc) and `serviceToken` (opt-in, `false` by
+ *   default — see {@link AdminHubAppOptions.serviceToken}'s own doc). `start.ts`'s own
+ *   `bootstrapAppServer`/`bootstrapServers` calls only ever serve what's registered here.
  */
 async function defineAdminHubMetadata(
   triggers:
@@ -308,11 +353,12 @@ async function defineAdminHubMetadata(
   dlq:
     | false
     | (DlqControllerOptions & { application?: AdminStartApplication }),
+  serviceToken: boolean,
 ): Promise<void> {
   const [, , , controllers] = await Promise.all([
-    import('@zanix/datamaster/core'),
-    import('@zanix/auth/core'),
-    import('@zanix/notifications/core'),
+    import(DATAMASTER_CORE_SPECIFIER),
+    import(AUTH_CORE_SPECIFIER),
+    import(NOTIFICATIONS_CORE_SPECIFIER),
     registerAdminHubModules([
       {
         options: triggers,
@@ -343,8 +389,12 @@ async function defineAdminHubMetadata(
           versionProtocol: ADMIN_VERSION_PROTOCOL,
           ...templates,
         },
-        importController: () =>
-          import('@zanix/notifications/templates-api').then((m) => m.createTemplatesController),
+        importController: async () => {
+          const templatesApi = await import(NOTIFICATIONS_TEMPLATES_API_SPECIFIER) as {
+            createTemplatesController: (options: TemplatesControllerOptions) => unknown
+          }
+          return templatesApi.createTemplatesController
+        },
       },
       {
         // Never `false` — unlike triggers/templates/dlq, `ServiceRegistry` always exists regardless
@@ -354,6 +404,19 @@ async function defineAdminHubMetadata(
         options: {} as RegistryControllerOptions & { application?: AdminStartApplication },
         importController: () =>
           import('./registry/registry.handler.ts').then((m) => m.createRegistryController),
+      },
+      {
+        // Opt-in, `false` by default (unlike `registry` above) — see
+        // `AdminHubAppOptions.serviceToken`'s own doc for the full rationale. `createServiceExchangeController`
+        // takes no options at all (always `prefix: 'admin/service-token'`), so this entry's `options`
+        // is a fixed `{}` when enabled, the same shape `registry`'s own entry already uses.
+        options: serviceToken
+          ? {} as Record<string, never> & { application?: AdminStartApplication }
+          : false,
+        importController: () =>
+          import('./service-exchange/service-exchange.handler.ts').then((m) =>
+            m.createServiceExchangeController
+          ),
       },
     ]),
   ])

@@ -2,12 +2,13 @@ import type {
   SyncCodeTemplateEntry,
   SyncCodeTemplatesResult,
   ZanixTemplateAttrs,
-} from '@zanix/notifications'
+} from '@zanix/notifications/templates-types'
+import type { TemplatesAdminRepositoryLike } from '../lazy/notifications-shim.ts'
 import type { ServiceRegistryEntry } from 'typings/registry.ts'
 
 import logger from '@zanix/logger'
 import { ProgramModule } from '@zanix/server'
-import { TemplatesAdminRepository, toSyncCodeTemplateEntries } from '@zanix/notifications'
+import { resolveTemplatesAdminRepositoryAndConverter } from '../lazy/notifications-shim.ts'
 import { DiscoveryAdminClient } from 'modules/discovery/discovery.client.ts'
 import { getServiceRegistry } from 'modules/registry/registry.ts'
 import { realHttpStatus } from 'modules/registry/reachability.ts'
@@ -74,7 +75,11 @@ export const getTemplatesDiscoveryClientFactory = (): TemplatesDiscoveryClientFa
  * Resolves `TemplatesAdminRepository` directly via `ProgramModule.providers` (a `@Provider`,
  * globally resolvable) rather than through `TemplatesAdminService` (an `@Interactor`, scoped to a
  * real request context this plain function doesn't have) — the same reach-in pattern
- * `createTemplatesDiscoveryProvider` already uses for its own snapshot.
+ * `createTemplatesDiscoveryProvider` already uses for its own snapshot. `TemplatesAdminRepository`
+ * itself is resolved LAZILY (`resolveTemplatesAdminRepositoryAndConverter`, see
+ * `specifiers.ts`'s own doc) — `@zanix/notifications` reaches Handlebars unconditionally from
+ * every subpath, so a deployment with templates disabled must never resolve it merely because this
+ * module is reachable.
  *
  * @throws {InternalError} If `serviceId` isn't registered — see `ServiceRegistry.get`.
  */
@@ -86,11 +91,19 @@ export async function syncTemplatesFromRegisteredService(
   try {
     const client = await getTemplatesDiscoveryClientFactory()(service)
     const entries = await pullTemplateEntries(client)
-    return await ProgramModule.providers.get(TemplatesAdminRepository)
-      .syncCodeTemplates(
-        entries,
-        updatedBy as never,
-      )
+    const { TemplatesAdminRepository } = await resolveTemplatesAdminRepositoryAndConverter()
+    // `ProgramModule.providers.get` requires a real `ZanixProviderClass` — nominal, not structural
+    // — which `TemplatesAdminRepositoryLike`'s hand-rolled interface deliberately never claims to
+    // be (see `specifiers.ts`'s own doc). `Target as never`/`as TemplatesAdminRepositoryLike`
+    // is the exact same bypass `@zanix/app`'s own `resolveTarget` uses internally for this same
+    // reason — the runtime value is the real, correctly-registered class either way.
+    const repository = ProgramModule.providers.get(
+      TemplatesAdminRepository as never,
+    ) as unknown as TemplatesAdminRepositoryLike
+    return await repository.syncCodeTemplates(
+      entries,
+      updatedBy as never,
+    )
   } catch (error) {
     // Covers every real failure mode of this cross-service orchestration in one place — the
     // Discovery fetch (both the `'templates'`/`'code-templates'` attempts inside
@@ -129,14 +142,16 @@ export async function syncTemplatesFromRegisteredService(
  *
  * Deliberately does **not** inspect any `ZanixTemplateAttrs` field itself (which one carries
  * content, which means "skip me") — that's `@zanix/notifications`'s own contract, not something
- * this package should know or decide; {@link toSyncCodeTemplateEntries} (exported by the actual
- * data owner) does that translation, this function only picks which resource to ask for.
+ * this package should know or decide; `toSyncCodeTemplateEntries` (exported by the actual
+ * data owner, resolved lazily alongside `TemplatesAdminRepository`) does that translation, this
+ * function only picks which resource to ask for.
  */
 async function pullTemplateEntries(
   client: DiscoveryAdminClient,
 ): Promise<SyncCodeTemplateEntry[]> {
   try {
     const entries = await client.snapshot<ZanixTemplateAttrs>('templates')
+    const { toSyncCodeTemplateEntries } = await resolveTemplatesAdminRepositoryAndConverter()
     return toSyncCodeTemplateEntries(entries)
   } catch (error) {
     const status = realHttpStatus(error)
