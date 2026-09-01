@@ -95,7 +95,7 @@ gateable resource the way triggers/templates/dlq each are.
 
 `RegistryHubClient` is the thin HTTP client for calling this route from OUTSIDE the hub process
 (e.g. an ops UI like `@zanix/console`), the hub-facing counterpart of `TriggersHubClient`/
-`TemplatesHubClient`:
+`TemplatesHubClient`/`DlqHubClient`:
 
 ```typescript
 import { RegistryHubClient } from 'jsr:@zanix/admin@[version]'

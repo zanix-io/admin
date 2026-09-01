@@ -38,9 +38,9 @@ export interface TemplatesSyncControllerInstance extends ZanixController {
  * aggregator-shaped (needs `ServiceRegistry`/Discovery to reach another registered service), unlike
  * the CRUD half of `/templates`, which is authored and owned by `@zanix/notifications`
  * (`@zanix/notifications/templates-api`'s `createTemplatesController`) and mounted alongside this
- * controller under the same prefix. See the "Local API vs Aggregator API" rule in the
- * `zanix-local-api-vs-aggregator` skill for why a single resource can have both a local-api half and
- * an aggregator-composed half, each owned by a different package.
+ * controller under the same prefix — a single resource can have both a local-api half (owned by
+ * whichever package owns the underlying data) and an aggregator-composed half like this one (owned
+ * by whichever package needs the cross-service view), each authored independently.
  *
  * `POST sync` pulls a registered service's code templates via its own
  * `/.well-known/zanix/code-templates` Discovery endpoint (see

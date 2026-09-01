@@ -160,8 +160,9 @@ const all = await client.list() // fanned out across every registered service, t
 ## `createTriggersAdminController` — a business service's own local `/admin/triggers`
 
 Owned and authored by `@zanix/datamaster` (`@zanix/datamaster/triggers-api`) — the actual owner of
-the `zanix-triggers` collection also owns the local HTTP surface fronting it, per this ecosystem's
-"local API vs aggregator API" rule (see the `zanix-local-api-vs-aggregator` skill).
+the `zanix-triggers` collection also owns the local HTTP surface fronting it: whichever package owns
+the underlying data authors that resource's local `/admin/<x>` CRUD surface, while an aggregator
+(like `TriggersAggregator` above) only ever proxies to it, never owns the data itself.
 
 Don't confuse this with `createTriggersController`/`TriggersAggregator` above — it's the other side
 of the same wire protocol. `createTriggersAdminController` builds the CRUD controller a **business

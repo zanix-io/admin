@@ -185,18 +185,20 @@ export type { DlqListQuery } from 'modules/dlq/dlq.client.ts'
 export { DiscoveryAdminClient } from 'modules/discovery/discovery.client.ts'
 
 /**
- * Thin HTTP clients for calling `zanix-admin`'s OWN hub-side `/triggers`/`/templates`/`/registry`
- * routes remotely — the hub-facing counterpart of the service-facing clients just above. **Don't
- * confuse the two levels**: `TriggersAdminClient`/`TemplatesAdminClient`/`DlqAdminClient` each call a
- * business SERVICE's own local `/admin/<x>` API; `TriggersHubClient`/`TemplatesHubClient`/
- * `RegistryHubClient` each call `zanix-admin`'s own central hub deployment instead (e.g.
- * `@zanix/console`, an external ops UI, is the intended caller — not this package's own aggregators,
- * which already talk to the hub in-process). `TemplatesHubClient` is CRUD-only — the hub never
- * composes `POST /templates/sync` (see that client's own doc for why).
+ * Thin HTTP clients for calling `zanix-admin`'s OWN hub-side `/triggers`/`/templates`/`/registry`/
+ * `/dlq` routes remotely — the hub-facing counterpart of the service-facing clients just above.
+ * **Don't confuse the two levels**: `TriggersAdminClient`/`TemplatesAdminClient`/`DlqAdminClient`
+ * each call a business SERVICE's own local `/admin/<x>` API; `TriggersHubClient`/`TemplatesHubClient`/
+ * `RegistryHubClient`/`DlqHubClient` each call `zanix-admin`'s own central hub deployment instead
+ * (e.g. `@zanix/console`, an external ops UI, is the intended caller — not this package's own
+ * aggregators, which already talk to the hub in-process). `TemplatesHubClient` is CRUD-only — the hub
+ * never composes `POST /templates/sync` (see that client's own doc for why). `DlqHubClient`'s own
+ * `list()` never accepts `DlqAdminClient.list()`'s own filters — see that client's own doc for why.
  */
 export { TriggersHubClient } from 'modules/triggers/triggers-hub.client.ts'
 export { TemplatesHubClient } from 'modules/templates/templates-hub.client.ts'
 export { RegistryHubClient } from 'modules/registry/registry-hub.client.ts'
+export { DlqHubClient } from 'modules/dlq/dlq-hub.client.ts'
 
 export {
   type AggregatedTrigger,
