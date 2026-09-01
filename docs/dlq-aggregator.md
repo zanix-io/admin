@@ -106,13 +106,31 @@ admin's `type: 'user'` token or a machine caller's `type: 'api'` one — same au
 `defineAdminHubApp`'s own `AdminHubAppOptions.dlq` (or `ZanixAdminHub.start()`'s own `dlq` option)
 accepts `false` to skip registering this route entirely — same shape as `triggers`/`templates`.
 
+**`DlqHubClient`** is the thin HTTP client for calling this `/dlq` route from OUTSIDE the hub
+process (e.g. an ops UI like `@zanix/console`) — don't confuse it with `DlqAdminClient` above, which
+calls a business SERVICE's own local `/admin/dlq` instead. `list()` always returns the full
+cross-service aggregation — the hub's own `/dlq` route never accepts `DlqAdminClient.list()`'s own
+filters:
+
+```typescript
+import { DlqHubClient } from 'jsr:@zanix/admin@[version]'
+
+const client = new DlqHubClient({
+  baseUrl: 'http://admin-hub.internal:9000',
+  headers: { 'X-Znx-Authorization': `Bearer ${accessToken}` },
+})
+const all = await client.list() // fanned out across every registered service, tagged by serviceId
+const one = await client.get('billing', '665f1a2b3c4d5e6f7a8b9c0d')
+```
+
 ---
 
 ## `createDlqAdminController` — a business service's own local `/admin/dlq`
 
 Owned and authored by `@zanix/datamaster` (`@zanix/datamaster/dlq-api`) — the actual owner of the
-`zanix-dlq` collection also owns the local HTTP surface fronting it, per this ecosystem's "local API
-vs aggregator API" rule (see the `zanix-local-api-vs-aggregator` skill).
+`zanix-dlq` collection also owns the local HTTP surface fronting it: whichever package owns the
+underlying data authors that resource's local `/admin/<x>` CRUD surface, while an aggregator (like
+`DlqAggregator` above) only ever proxies to it, never owns the data itself.
 
 Don't confuse this with `createDlqController`/`DlqAggregator` above — it's the other side of the
 same wire protocol. `createDlqAdminController` builds the CRUD controller a **business service

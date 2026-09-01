@@ -45,14 +45,15 @@ Deno.test({
     // DLQ's own hub REST controller (`createDlqController`) — added alongside triggers/templates in
     // `defineAdminHubApp`'s default `{}` (never `false`), same on-by-default posture, so it belongs
     // in this same real-HTTP-reachability check, not just in `dlq.handler.test.ts`'s isolated,
-    // in-process controller tests (see `admin-composition-and-extension`'s own note on this gap).
+    // in-process controller tests — only a real HTTP round trip catches a route wired to the wrong
+    // path/prefix, which an in-process controller test never exercises.
     const dlq = await fetch(`${baseUrl}/dlq/list`)
     assertEquals(dlq.status, 401)
     await dlq.body?.cancel()
 
     // `/registry` is always composed (no `false` opt-out — see `createRegistryController`'s own
-    // doc), so it belongs in this same real-HTTP-reachability check alongside the other three,
-    // matching `admin-composition-and-extension`'s own note on this exact gap.
+    // doc), so it belongs in this same real-HTTP-reachability check alongside the other three —
+    // same reasoning: only a real HTTP round trip catches a route mounted under the wrong path.
     const registry = await fetch(`${baseUrl}/registry/list`)
     assertEquals(registry.status, 401)
     await registry.body?.cancel()

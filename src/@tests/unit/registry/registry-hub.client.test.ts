@@ -15,7 +15,7 @@ const jsonResponse = (body: unknown, status = 200) =>
     }),
   )
 
-Deno.test('RegistryHubClient.list GETs /registry/list on the hub base URL', async () => {
+Deno.test('RegistryHubClient.list GETs /registry on the hub base URL', async () => {
   const mockFetch = spy((_url: string, _opts: any) =>
     jsonResponse([{ serviceId: 'billing', adminBaseUrl: 'http://billing.internal:30248' }])
   )
@@ -27,7 +27,7 @@ Deno.test('RegistryHubClient.list GETs /registry/list on the hub base URL', asyn
   assertEquals(result, [{ serviceId: 'billing', adminBaseUrl: 'http://billing.internal:30248' }])
   assertSpyCalls(mockFetch, 1)
   const [url, opts] = mockFetch.calls[0].args as [string, any]
-  assertEquals(url, 'http://admin-hub.internal:9000/registry/list')
+  assertEquals(url, 'http://admin-hub.internal:9000/registry')
   assertEquals(opts.method, 'GET')
 })
 

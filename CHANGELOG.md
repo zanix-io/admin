@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/) and this project
 adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [2.2.0] - 2026-08-31
+
+### Added
+
+- **`DlqHubClient`** — the hub-facing thin HTTP client for `zanix-admin`'s own `/dlq` route
+  (`createDlqController`), the missing counterpart to `TriggersHubClient`/`TemplatesHubClient`/
+  `RegistryHubClient`. Same conventions as `TriggersHubClient` (`ADMIN_PROTOCOL_HEADER` stamping,
+  `encodeURIComponent`-escaped `serviceId`/`id` path segments), but its own wire shape is NOT
+  identical to `DlqAdminClient`'s (the service-facing client `dlq.client.ts` already exports):
+  `list()` never accepts `DlqAdminClient.list()`'s own `DlqListQuery` filters — the hub's own
+  `GET
+  /dlq` always returns the full cross-service aggregation (`DlqAggregator.list()`'s
+  Discovery-backed fan-out), each entry tagged with the `serviceId` it came from — and every other
+  method takes a `serviceId` path segment `DlqAdminClient` never needs, since one hub instance
+  proxies many services. `push`/`requeue`/`discard` still accept the same
+  `DlqPushInput`/`DlqRequeueOptions`/ `DlqDiscardOptions` bodies as `DlqAdminClient`, since the hub
+  forwards them unchanged to the resolved service's own `/admin/dlq`. Exported from both the root
+  barrel and the `./client` subpath, alongside the other three hub clients.
+
+### Fixed
+
+- **`RegistryHubClient.list()`** now `GET`s `/registry` (the hub's own registry route root) instead
+  of the nonexistent `/registry/list` — `createRegistryController` mounts `list()` as a bare
+  `@Get()` at the prefix root, unlike the hub's other controllers. Closes #1.
+
 ## [2.1.0] - 2026-08-26
 
 ### Added
@@ -78,8 +103,7 @@ adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
   `TemplateParamsRTO`, `UpdateTemplateRTO`, `TriggerModelParamsRTO`) are no longer exported from
   this package. Import `createTriggersAdminController` from `@zanix/datamaster/triggers-api`, and
   `createTemplatesController` from `@zanix/notifications/templates-api` — each is owned and authored
-  by the package that owns the underlying data, per the "local API vs aggregator API" rule (see the
-  `zanix-local-api-vs-aggregator` skill).
+  by the package that owns the underlying data, never by an aggregator like this one.
 
 ### Added
 

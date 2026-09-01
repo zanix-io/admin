@@ -16,9 +16,8 @@
  * (`TEMPLATES_BACKEND` unset by default — see `admin-resource-gates.ts`'s `isTemplatesResourceEnabled`),
  * so a deployment that never configures it must never pay for Handlebars (reached unconditionally
  * through `@zanix/notifications`'s own `TemplateProvider`/compiled template registries, from EVERY
- * subpath this package touches — root, `/core`, and `/templates-api` alike, confirmed via a direct
- * `deno info --json` probe from this package's own import map: all three reach the same DB-backed
- * template storage integration) merely by importing `@zanix/admin`.
+ * subpath this package touches — root, `/core`, and `/templates-api` alike all reach the same
+ * DB-backed template storage integration) merely by importing `@zanix/admin`.
  *
  * Every `const specifier = SOME_CONSTANT` two-step at each call site (never `import(SOME_CONSTANT)`
  * inline) is deliberate, not incidental: Deno's own module graph builder only follows a dynamic
@@ -27,31 +26,31 @@
  */
 
 /** `@zanix/notifications`'s bare root — `createTemplatesDiscoveryProvider`, `TemplatesAdminService`,
- * `TemplatesAdminRepository`, `toSyncCodeTemplateEntries`. Floor pinned at `0.7.0` to match this
+ * `TemplatesAdminRepository`, `toSyncCodeTemplateEntries`. Floor pinned at `1.0.0` to match this
  * package's own `/templates-env`/`/templates-api`/`/templates-types` pins — a lower floor here
  * would resolve a genuinely different `TemplatesAdminService`/`TemplatesAdminRepository` module
  * instance than those subpaths do whenever a local development link is in play, since a literal
  * version-ranged specifier and a raw local-path override only converge on the same linked checkout
  * when their version ranges actually overlap. */
-export const NOTIFICATIONS_SPECIFIER = 'jsr:@zanix/notifications@^0.7.0'
+export const NOTIFICATIONS_SPECIFIER = 'jsr:@zanix/notifications@^1.0.0'
 
 /** `@zanix/notifications`'s `./templates-api` subpath — `createTemplatesController`. Same floor as
  * `NOTIFICATIONS_SPECIFIER` above, same reasoning. */
-export const NOTIFICATIONS_TEMPLATES_API_SPECIFIER = 'jsr:@zanix/notifications@^0.7.0/templates-api'
+export const NOTIFICATIONS_TEMPLATES_API_SPECIFIER = 'jsr:@zanix/notifications@^1.0.0/templates-api'
 
 /** `@zanix/notifications`'s `./core` subpath — zero-config Mongo/`TemplateProvider` registration,
  * side-effect only (no export this package reads by name). Same floor as `NOTIFICATIONS_SPECIFIER`
  * above, same reasoning. */
-export const NOTIFICATIONS_CORE_SPECIFIER = 'jsr:@zanix/notifications@^0.7.0/core'
+export const NOTIFICATIONS_CORE_SPECIFIER = 'jsr:@zanix/notifications@^1.0.0/core'
 
 /** `@zanix/datamaster`'s `./core` subpath — zero-config Mongo/Redis connector registration,
  * side-effect only (no export this package reads by name). Same reasoning as
  * `NOTIFICATIONS_CORE_SPECIFIER` above: a bare `import('@zanix/datamaster/core')` literal would be
  * statically reachable (and so `redis`/`mongoose`-materializing) merely by importing
  * `admin-hub-app.ts`, whether or not `ZanixAdminHub.start()` is ever actually called. */
-export const DATAMASTER_CORE_SPECIFIER = 'jsr:@zanix/datamaster@^1.8.0/core'
+export const DATAMASTER_CORE_SPECIFIER = 'jsr:@zanix/datamaster@^1.9.0/core'
 
 /** `@zanix/auth`'s `./core` subpath — zero-config session/auth connector registration, side-effect
  * only (no export this package reads by name). Same reasoning as `NOTIFICATIONS_CORE_SPECIFIER`
  * above. */
-export const AUTH_CORE_SPECIFIER = 'jsr:@zanix/auth@0.8.1/core'
+export const AUTH_CORE_SPECIFIER = 'jsr:@zanix/auth@^1.0.0/core'

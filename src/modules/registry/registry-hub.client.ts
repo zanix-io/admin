@@ -52,6 +52,6 @@ export class RegistryHubClient extends RestClient {
 
   /** Lists every service registered on this hub instance. */
   public list(): Promise<ServiceRegistryEntry[]> {
-    return this.http.get<ServiceRegistryEntry[]>('/registry/list')
+    return this.http.get<ServiceRegistryEntry[]>('/registry')
   }
 }

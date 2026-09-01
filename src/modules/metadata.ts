@@ -268,8 +268,8 @@ export const defineAdminMetadata = async (): Promise<void> => {
         // Two separate controllers, mounted under the same `admin/templates` prefix — the CRUD half
         // is authored and owned by `@zanix/notifications` (never assumes an auth mechanism itself,
         // hence the explicit `guards` here); `sync` is this package's own cross-service extension,
-        // fully self-contained (bakes in its own `AuthTokenValidation`). See the "Local API vs
-        // Aggregator API" rule in `zanix-local-api-vs-aggregator`.
+        // fully self-contained (bakes in its own `AuthTokenValidation`) — the data owner authors the
+        // local CRUD surface, this package only ever adds the cross-service extension on top.
         // Lazy — `@zanix/notifications` is the ONE genuinely separable dependency here (Handlebars,
         // reached unconditionally from every subpath — see `specifiers.ts`'s own doc); a
         // deployment with `TEMPLATES_BACKEND` unset never resolves it, since this only runs once

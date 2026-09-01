@@ -1,6 +1,6 @@
 {
   "name": "@zanix/admin",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "zanix": {
     "project": "library"
   },
@@ -56,7 +56,7 @@
     "@zanix/server": "jsr:@zanix/server@^4.0.0",
     "@zanix/app": "jsr:@zanix/app@^0.2.1",
     "@zanix/app/runtime": "jsr:@zanix/app@^0.2.1/runtime",
-    "@zanix/auth": "jsr:@zanix/auth@0.8.1",
+    "@zanix/auth": "jsr:@zanix/auth@^1.0.0",
     // Deliberately absent from the top-level map: `@zanix/auth/core` and the bare `@zanix/datamaster`
     // root (including its own `/core`) — no REAL (non-test) file in this package imports any of
     // them directly (a test fixture under `src/@tests/` does import `@zanix/datamaster/core`
@@ -64,16 +64,16 @@
     // `/core`'s own zero-config
     // connector/provider wiring is reached through the lazy, non-literal `AUTH_CORE_SPECIFIER`/
     // `DATAMASTER_CORE_SPECIFIER` in `modules/lazy/specifiers.ts` instead (see that file's own doc).
-    // `TriggersAdminRepository`/`TriggersAdminService`/`createTriggersDiscoveryProvider` (previously
-    // pulled from datamaster's bare root) are exposed on `/triggers-api` instead — see the TEMP
-    // override below — and `isTriggersResourceEnabled`/`CreateTriggerInput`/`TriggersModelAttrs`/
+    // `TriggersAdminRepository`/`TriggersAdminService`/`createTriggersDiscoveryProvider` are exposed
+    // on `/triggers-api` instead of the bare root — see the TEMP override below — and
+    // `isTriggersResourceEnabled`/`CreateTriggerInput`/`TriggersModelAttrs`/
     // `UpdateTriggerInput` live on `/database`, `isDlqResourceEnabled`/`Dlq*`/`DlqAdminService` on
     // `/dlq`. Splitting these keeps this package's own reachable graph exactly as wide as each
     // symbol actually needs.
-    "@zanix/datamaster/database": "jsr:@zanix/datamaster@^1.8.0/database",
-    "@zanix/datamaster/dlq": "jsr:@zanix/datamaster@^1.8.0/dlq",
-    "@zanix/datamaster/triggers-api": "jsr:@zanix/datamaster@^1.8.0/triggers-api",
-    "@zanix/datamaster/dlq-api": "jsr:@zanix/datamaster@^1.8.0/dlq-api",
+    "@zanix/datamaster/database": "jsr:@zanix/datamaster@^1.9.0/database",
+    "@zanix/datamaster/dlq": "jsr:@zanix/datamaster@^1.9.0/dlq",
+    "@zanix/datamaster/triggers-api": "jsr:@zanix/datamaster@^1.9.0/triggers-api",
+    "@zanix/datamaster/dlq-api": "jsr:@zanix/datamaster@^1.9.0/dlq-api",
     // Deliberately absent from the top-level map: the bare `@zanix/notifications` root and
     // `/core` — no REAL (non-test) file in this package imports either directly. `/core`'s own
     // zero-config connector/provider wiring is reached through the lazy, non-literal
@@ -83,9 +83,9 @@
     // narrow subpaths below instead. A handful of test fixtures under `src/@tests/` DO import the
     // bare root directly (for symbols only the full barrel groups together) — scoped to that
     // directory only, via `scopes` above, so it never reaches this package's own published graph.
-    "@zanix/notifications/templates-api": "jsr:@zanix/notifications@^0.7.0/templates-api",
-    "@zanix/notifications/templates-env": "jsr:@zanix/notifications@^0.7.0/templates-env",
-    "@zanix/notifications/templates-types": "jsr:@zanix/notifications@^0.7.0/templates-types",
+    "@zanix/notifications/templates-api": "jsr:@zanix/notifications@^1.0.0/templates-api",
+    "@zanix/notifications/templates-env": "jsr:@zanix/notifications@^1.0.0/templates-env",
+    "@zanix/notifications/templates-types": "jsr:@zanix/notifications@^1.0.0/templates-types",
     "@zanix/logger": "jsr:@zanix/utils@^4.0.0/logger",
     "@zanix/errors": "jsr:@zanix/utils@^4.0.0/errors",
     "@zanix/helpers": "jsr:@zanix/utils@^4.0.0/helpers",
@@ -97,17 +97,22 @@
   },
   "scopes": {
     "./src/@tests/": {
-      "@zanix/notifications": "jsr:@zanix/notifications@^0.7.0",
-      "@zanix/datamaster/core": "jsr:@zanix/datamaster@^1.8.0/core"
+      "@zanix/notifications": "jsr:@zanix/notifications@^1.0.0",
+      "@zanix/datamaster/core": "jsr:@zanix/datamaster@^1.9.0/core"
     }
   },
   "exports": {
     ".": "./mod.ts",
     // `ZanixAdminHub` on its own, apart from the root's own RTOs/`TriggersAdminService`/thin HTTP
     // clients — see `src/modules/zanix-admin-hub.ts`'s own doc for why a consumer that wants ONLY
-    // the "run the hub" shortcut should import this instead of the root, and
-    // `deno-lazy-dependency-pattern` for the general mechanism.
-    "./hub": "./src/modules/zanix-admin-hub.ts"
+    // the "run the hub" shortcut should import this instead of the root, keeping the root barrel's
+    // own heavier dependencies out of that consumer's module graph.
+    "./hub": "./src/modules/zanix-admin-hub.ts",
+    // Role constants, Application names, and the hub-facing thin HTTP clients — see
+    // `src/modules/client.ts`'s own doc for why a client-only consumer (no admin backend of its
+    // own) must import this instead of the root to avoid pulling in the root barrel's heavier
+    // dependencies during SSR bundling.
+    "./client": "./src/modules/client.ts"
   },
   "nodeModulesDir": "auto",
   "publish": {

@@ -190,8 +190,8 @@ existing behavior, via `resources`/`uses`, `registerCoreProviderSlot`, or `@zani
 `behaviors`/`ctx.behavior()` — a different question this pattern doesn't answer.)
 
 **What actually happens, concretely**: `defineAdminHubApp()`'s own `/triggers`/`/templates`/`/dlq`
-REST surface used to also own the `operations`/`mcp` surface other apps/agents invoke via
-`ctx.remote('admin-hub').call(...)`. That surface was extracted into its own, physically-separate
+REST surface is physically separate from the `operations`/`mcp` surface other apps/agents invoke via
+`ctx.remote('admin-hub').call(...)` — that invocation surface lives in its own, physically-separate
 Zanix Apps — `defineHubTriggersApp()`/`defineHubTemplatesApp()`/`defineHubDlqApp()` (hub side,
 `src/modules/triggers/hub-triggers-app.ts`/`src/modules/templates/hub-templates-app.ts`/
 `src/modules/dlq/hub-dlq-app.ts`), and `defineLocalTriggersApp()`/`defineLocalTemplatesApp()`/
@@ -255,25 +255,29 @@ to apps two different teams own.
 
 ## 🌐 Hub clients — calling `zanix-admin` itself from outside
 
-`TriggersHubClient`/`TemplatesHubClient`/`RegistryHubClient` are thin HTTP clients for calling THIS
-package's own hub-side `/triggers`/`/templates`/`/registry` routes remotely — e.g. from an external
-ops UI like `@zanix/console`, not yet built. **Don't confuse these with the service-facing clients**
-above (`TriggersAdminClient`/`TemplatesAdminClient`/`DlqAdminClient`), which each call a business
-SERVICE's own local `/admin/<x>` API instead — the two levels point at different processes entirely:
+`TriggersHubClient`/`TemplatesHubClient`/`RegistryHubClient`/`DlqHubClient` are thin HTTP clients
+for calling THIS package's own hub-side `/triggers`/`/templates`/`/registry`/`/dlq` routes remotely
+— e.g. from an external ops UI like `@zanix/console`. **Don't confuse these with the service-facing
+clients** above (`TriggersAdminClient`/`TemplatesAdminClient`/`DlqAdminClient`), which each call a
+business SERVICE's own local `/admin/<x>` API instead — the two levels point at different processes
+entirely:
 
 ```typescript
-import { RegistryHubClient, TriggersHubClient } from 'jsr:@zanix/admin@[version]'
+import { DlqHubClient, RegistryHubClient, TriggersHubClient } from 'jsr:@zanix/admin@[version]'
 
 // Points at the HUB's own base URL, not any one registered service's.
 const triggers = new TriggersHubClient({ baseUrl: 'http://admin-hub.internal:9000' })
 const registry = new RegistryHubClient({ baseUrl: 'http://admin-hub.internal:9000' })
+const dlq = new DlqHubClient({ baseUrl: 'http://admin-hub.internal:9000' })
 ```
 
 `@zanix/admin` owns the wire contract for its own hub routes (the routes, their RTOs, and their
 response shapes), the same reason `TriggersAdminClient` already lives here even though it calls out
 to a business service's own admin API — whoever eventually calls a client doesn't change who authors
 it. `TemplatesHubClient` is CRUD-only — the hub never composes `POST /templates/sync` (see
-[`docs/templates-api.md`](./docs/templates-api.md) for why).
+[`docs/templates-api.md`](./docs/templates-api.md) for why). `DlqHubClient`'s own `list()` always
+returns the full cross-service aggregation (no `DlqAdminClient.list()`-style filters) — see that
+client's own doc for why the hub's own `/dlq` route never accepts one.
 
 ---
 
