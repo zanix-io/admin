@@ -27,6 +27,13 @@ adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 - **`DlqHubClient.list()`** (added in v2.2.0) had the identical bug, `GET`ting bare `/dlq` instead
   of the real `/dlq/list` — same root cause as `RegistryHubClient` above, never previously filed as
   its own issue.
+- **`registerAdminHubModules`** (`admin-hub-app.ts`) now registers its entries (triggers/templates/
+  dlq/registry/service-token) sequentially instead of via `Promise.all`, matching
+  `registerAdminMetadataModules`'s own sequential registration in `metadata.ts`. Concurrent
+  `ProgramModule.defineApplication(...)` scopes rely on `AsyncContext`, whose current implementation
+  can misattribute a controller to the wrong Application under genuine concurrency — the likely
+  cause of a hub sub-app intermittently missing from `/ready`'s `body.apps`, or one of its routes
+  404ing instead of enforcing auth, shortly after `ZanixAdminHub.start()` already resolved.
 
 ## [2.2.0] - 2026-08-31
 

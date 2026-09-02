@@ -200,23 +200,35 @@ interface AdminHubModuleEntry<TOptions extends object> {
  * only the controllers actually built (skipped/`false` entries contribute nothing) — callers keep
  * them alive the same way `defineAdminHubMetadata` already did (see {@link registeredControllers}'s
  * own doc for why).
+ *
+ * Registered sequentially (never concurrently, e.g. via `Promise.all`) — each entry opens its own
+ * `ProgramModule.defineApplication(...)` scope, and these must resolve one at a time, the same
+ * reason `registerAdminMetadataModules` (`metadata.ts`) and `@zanix/app`'s own `activateApps` never
+ * parallelize their own registration loops either: concurrent `defineApplication` scopes rely on
+ * `AsyncContext`, whose current implementation can misattribute a controller to the wrong
+ * Application under genuine concurrency (see `ProgramModule.defineApplication`'s own doc), which
+ * would surface as a hub sub-app intermittently missing from `/ready`, or its route 404ing instead
+ * of enforcing auth.
  */
 async function registerAdminHubModules(
   // deno-lint-ignore no-explicit-any
   entries: AdminHubModuleEntry<any>[],
 ): Promise<unknown[]> {
-  const results = await Promise.all(entries.map(async (entry) => {
-    if (entry.options === false) return undefined
+  const results: (unknown | unknown[])[] = []
+  for (const entry of entries) {
+    if (entry.options === false) continue
 
     const { application = ADMIN_HUB_APPLICATION, ...controllerOptions } = entry.options
+    // deno-lint-ignore no-await-in-loop
     const createController = await entry.importController()
 
-    let controller: unknown | unknown[]
+    let controller: unknown | unknown[] = undefined
+    // deno-lint-ignore no-await-in-loop
     await ProgramModule.defineApplication(application, () => {
       controller = createController(controllerOptions)
     })
-    return controller
-  }))
+    results.push(controller)
+  }
 
   return results.flat().filter((controller) => controller !== undefined)
 }
