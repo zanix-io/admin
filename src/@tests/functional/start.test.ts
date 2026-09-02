@@ -14,7 +14,7 @@ Deno.test({
   sanitizeOps: false,
   sanitizeResources: false,
   name:
-    "ZanixAdminHub.start() registers /triggers, /templates, /dlq and /registry behind auth, bound to 'admin-hub' by default, and never registers /admin/service-token unless serviceToken: true is passed",
+    "ZanixAdminHub.start() registers /triggers, /templates (CRUD and sync), /dlq and /registry behind auth, bound to 'admin-hub' by default, and never registers /admin/service-token unless serviceToken: true is passed",
   fn: async () => {
     // There is no auto-generated anchored id anymore — set one explicitly so all three controllers
     // (defaulting to the `'admin-hub'` Application) are reachable at a known, id-prefixed address.
@@ -41,6 +41,14 @@ Deno.test({
     const templates = await fetch(`${baseUrl}/templates/list`)
     assertEquals(templates.status, 401)
     await templates.body?.cancel()
+
+    // `POST /templates/sync` (`createTemplatesSyncController`) is composed alongside the CRUD
+    // controller under the same `/templates` prefix — a real HTTP round trip is the only thing that
+    // catches this entry being dropped/mis-mounted, the same reasoning as every other route checked
+    // in this test.
+    const templatesSync = await fetch(`${baseUrl}/templates/sync`, { method: 'POST' })
+    assertEquals(templatesSync.status, 401)
+    await templatesSync.body?.cancel()
 
     // DLQ's own hub REST controller (`createDlqController`) — added alongside triggers/templates in
     // `defineAdminHubApp`'s default `{}` (never `false`), same on-by-default posture, so it belongs

@@ -79,12 +79,16 @@ is currently installed:
 
 | Route                              | Behavior                                                         |
 | ---------------------------------- | ---------------------------------------------------------------- |
-| `GET /dlq`                         | `list()` — fanned out across every service's Discovery snapshot. |
+| `GET /dlq/list`                    | `list()` — fanned out across every service's Discovery snapshot. |
 | `GET /dlq/:serviceId/:id`          | `get(serviceId, id)`.                                            |
 | `POST /dlq/:serviceId`             | `push(serviceId, body)`.                                         |
 | `POST /dlq/:serviceId/:id/requeue` | `requeue(serviceId, id, { resetAttempts? })`.                    |
 | `POST /dlq/:serviceId/:id/discard` | `discard(serviceId, id, { reason? })`.                           |
 | `DELETE /dlq/:serviceId/:id`       | `remove(serviceId, id)`.                                         |
+
+`list()`'s route is a bare `@Get()` with no path argument — `@zanix/server` defaults an omitted path
+to the decorated method's own name, so it lands at `/list` under the controller's `dlq` prefix, same
+convention `/triggers/list`/`/templates/list`/`/registry/list` all follow.
 
 Install a real (authenticated) aggregator with `setDlqAggregator` **before** `ZanixAdminHub.start()`
 — left unset, the controller falls back to a default `DlqAggregator` (the shared `ServiceRegistry`
@@ -108,9 +112,9 @@ accepts `false` to skip registering this route entirely — same shape as `trigg
 
 **`DlqHubClient`** is the thin HTTP client for calling this `/dlq` route from OUTSIDE the hub
 process (e.g. an ops UI like `@zanix/console`) — don't confuse it with `DlqAdminClient` above, which
-calls a business SERVICE's own local `/admin/dlq` instead. `list()` always returns the full
-cross-service aggregation — the hub's own `/dlq` route never accepts `DlqAdminClient.list()`'s own
-filters:
+calls a business SERVICE's own local `/admin/dlq` instead. `list()` GETs `/dlq/list` and always
+returns the full cross-service aggregation — the hub's own route never accepts
+`DlqAdminClient.list()`'s own filters:
 
 ```typescript
 import { DlqHubClient } from 'jsr:@zanix/admin@[version]'

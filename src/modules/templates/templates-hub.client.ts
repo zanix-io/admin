@@ -1,6 +1,7 @@
 import type {
   CreateTemplateInput,
   Notifiers,
+  SyncCodeTemplatesResult,
   UpdateTemplateInput,
   ZanixTemplateAttrs,
 } from '@zanix/notifications/templates-types'
@@ -9,10 +10,11 @@ import { ADMIN_PROTOCOL_HEADER, RestClient } from '@zanix/server'
 import { ADMIN_PROTOCOL_VERSION } from 'utils/constants.ts'
 
 /**
- * Thin HTTP client for `zanix-admin`'s own hub-side `/templates` CRUD API (see
- * `@zanix/notifications/templates-api`'s `createTemplatesController`, composed by
- * `defineAdminHubApp`) — this package owns the wire contract for its own hub routes (the routes and
- * their response shapes, even though the CRUD controller code itself is authored by
+ * Thin HTTP client for `zanix-admin`'s own hub-side `/templates` API — CRUD (see
+ * `@zanix/notifications/templates-api`'s `createTemplatesController`) plus this package's own
+ * `sync` extension (`createTemplatesSyncController`), both composed by `defineAdminHubApp` under the
+ * same prefix — this package owns the wire contract for its own hub routes (the routes and their
+ * response shapes, even though the CRUD controller code itself is authored by
  * `@zanix/notifications`), the same reason `TemplatesAdminClient` lives here even though IT calls
  * out to a business service's own admin API. Whoever eventually calls this client (e.g.
  * `@zanix/console`) doesn't change who authors it — the wire-contract owner does.
@@ -24,13 +26,11 @@ import { ADMIN_PROTOCOL_VERSION } from 'utils/constants.ts'
  * instance"). Don't confuse the two levels: constructing this with a business service's own
  * `adminBaseUrl` would hit that service's unrelated `/templates` route instead of the hub's.
  *
- * **CRUD only — deliberately no `sync()`.** `POST /templates/sync` (`createTemplatesSyncController`)
- * is composed only on the LOCAL, business-service-side `/admin/templates` prefix (`metadata.ts`'s
- * own `defineAdminMetadata`), not on this hub-side `/templates` prefix (`defineAdminHubApp` only
- * ever wires `createTemplatesController`, the CRUD half, for the hub) — confirmed by reading both
- * composition sites directly, not assumed. Adding a `sync()` method here would call a hub route that
- * doesn't exist today; if a future change wires `POST /templates/sync` onto the hub too, this class
- * gains the matching method then, not before.
+ * {@link sync} lets a hub operator (or an automated caller) trigger the same batch, upsert-aware
+ * code→database pull the LOCAL, business-service-side `/admin/templates/sync`
+ * (`metadata.ts`'s own `defineAdminMetadata`) already exposes — directly against the hub, without
+ * needing local database access of its own. `serviceId` must already be registered in the hub's own
+ * `ServiceRegistry`.
  *
  * Every request declares this client's own {@link ADMIN_PROTOCOL_VERSION} via
  * {@link ADMIN_PROTOCOL_HEADER} automatically — override it in `options.headers` only if you have a
@@ -54,6 +54,7 @@ import { ADMIN_PROTOCOL_VERSION } from 'utils/constants.ts'
  *   headers: { 'X-Znx-Authorization': `Bearer ${accessToken}` },
  * })
  * const templates = await client.list()
+ * const { seeded, resynced } = await client.sync('billing')
  * ```
  */
 export class TemplatesHubClient extends RestClient {
@@ -105,5 +106,17 @@ export class TemplatesHubClient extends RestClient {
   /** Deactivates a template entry by `channel`/`name` (soft delete, same as the local API). */
   public async remove(channel: Notifiers, name: string): Promise<void> {
     await this.http.delete(`/templates/${channel}/${encodeURIComponent(name)}`)
+  }
+
+  /**
+   * Triggers a batch code→database sync on the hub, pulled from `serviceId`'s own
+   * `/.well-known/zanix/templates`/`/.well-known/zanix/code-templates` Discovery snapshot — see
+   * `createTemplatesSyncController`/`syncTemplatesFromRegisteredService`'s own docs for the full
+   * two-resource preference order and reconciliation rules.
+   */
+  public sync(serviceId: string): Promise<SyncCodeTemplatesResult> {
+    return this.http.post<SyncCodeTemplatesResult>('/templates/sync', {
+      body: JSON.stringify({ serviceId }),
+    })
   }
 }

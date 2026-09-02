@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/) and this project
 adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-09-01
+
+### Added
+
+- **`TemplatesHubClient.sync(serviceId)`** — `defineAdminHubApp` now composes `POST /templates/sync`
+  (`createTemplatesSyncController`) alongside the CRUD controller under the hub's own `/templates`
+  prefix, the same pair the LOCAL, business-service-side `/admin/templates` already exposes. Until
+  now `ZanixAdminHub.start()` only ever wired the CRUD half for the hub, so a hub had no way to seed
+  its central catalog from a registered service's own Discovery snapshot — only individual
+  `POST
+  /templates` CRUD calls worked. Closes #4.
+
+### Fixed
+
+- **`RegistryHubClient.list()`** now correctly `GET`s `/registry/list` again. v2.2.0's own "fix" for
+  #1 (changing it to bare `/registry`) was itself wrong: `createRegistryController`'s `list()` is a
+  bare `@Get()` with no path argument, and `@zanix/server` defaults an omitted path to the decorated
+  method's own name (`'list'`), not the prefix root — this package's own `start.test.ts` already
+  asserted `/registry/list` against a real running server, contradicting that "fix." Closes #5.
+- **`DlqHubClient.list()`** (added in v2.2.0) had the identical bug, `GET`ting bare `/dlq` instead
+  of the real `/dlq/list` — same root cause as `RegistryHubClient` above, never previously filed as
+  its own issue.
+- **`registerAdminHubModules`** (`admin-hub-app.ts`) now registers its entries (triggers/templates/
+  dlq/registry/service-token) sequentially instead of via `Promise.all`, matching
+  `registerAdminMetadataModules`'s own sequential registration in `metadata.ts`. Concurrent
+  `ProgramModule.defineApplication(...)` scopes rely on `AsyncContext`, whose current implementation
+  can misattribute a controller to the wrong Application under genuine concurrency — the likely
+  cause of a hub sub-app intermittently missing from `/ready`'s `body.apps`, or one of its routes
+  404ing instead of enforcing auth, shortly after `ZanixAdminHub.start()` already resolved.
+
 ## [2.2.0] - 2026-08-31
 
 ### Added

@@ -84,14 +84,19 @@ e.g. exit non-zero if any entry isn't `'ok'`.
 
 ---
 
-## `GET /registry` — reading the registry over HTTP
+## `GET /registry/list` — reading the registry over HTTP
 
-`defineAdminHubApp` always composes a single, read-only `GET /registry` route
+`defineAdminHubApp` always composes a single, read-only `GET /registry/list` route
 (`createRegistryController`) reflecting whichever `ServiceRegistry` instance is currently installed
 — unlike `/triggers`/`/templates`/`/dlq`, there is no `registry: false` opt-out, since
 `ServiceRegistry` always exists regardless of which of those three are enabled. Guarded by just
 `ADMIN_ROLE` (no dedicated `ADMIN_REGISTRY_ROLE`) — this is core hub info, not an individually
 gateable resource the way triggers/templates/dlq each are.
+
+The route's own `list()` method is a bare `@Get()` with no path argument — `@zanix/server` defaults
+an omitted path to the decorated method's own name, so it lands at `/list` under the controller's
+`registry` prefix, same convention every other hub controller's `list()` route follows
+(`/triggers/list`, `/templates/list`, `/dlq/list`).
 
 `RegistryHubClient` is the thin HTTP client for calling this route from OUTSIDE the hub process
 (e.g. an ops UI like `@zanix/console`), the hub-facing counterpart of `TriggersHubClient`/

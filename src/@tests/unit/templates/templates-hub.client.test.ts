@@ -118,14 +118,30 @@ Deno.test('TemplatesHubClient.get encodes a name containing a path separator', a
   assertEquals(url, 'http://admin-hub.internal:9000/templates/email/..%2Fadmin%2Fother')
 })
 
+Deno.test('TemplatesHubClient.sync POSTs {serviceId} to /templates/sync, returns summary', async () => {
+  const mockFetch = spy((_url: string, opts: any) => {
+    assertEquals(opts.method, 'POST')
+    assertEquals(JSON.parse(opts.body), { serviceId: 'billing' })
+    return jsonResponse({ seeded: 1, resynced: 0 })
+  })
+  globalThis.fetch = mockFetch as unknown as typeof fetch
+
+  const client = new TemplatesHubClient({ baseUrl: 'http://admin-hub.internal:9000' })
+  const result = await client.sync('billing')
+
+  assertEquals(result, { seeded: 1, resynced: 0 })
+  const [url] = mockFetch.calls[0].args as [string, any]
+  assertEquals(url, 'http://admin-hub.internal:9000/templates/sync')
+})
+
 Deno.test('TemplatesHubClient accepts a bare contextId string (RestClient shape)', () => {
   const client = new TemplatesHubClient('hub-context')
 
   assertEquals(client instanceof TemplatesHubClient, true)
 })
 
-Deno.test('TemplatesHubClient has no sync() — the hub composes no /templates/sync route', () => {
+Deno.test('TemplatesHubClient has a sync() — the hub composes /templates/sync alongside CRUD', () => {
   const client = new TemplatesHubClient({ baseUrl: 'http://admin-hub.internal:9000' })
 
-  assertEquals('sync' in client, false)
+  assertEquals('sync' in client, true)
 })

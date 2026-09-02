@@ -113,11 +113,15 @@ currently installed:
 
 | Route                                | Behavior                                                         |
 | ------------------------------------ | ---------------------------------------------------------------- |
-| `GET /triggers`                      | `list()` — fanned out across every service's Discovery snapshot. |
+| `GET /triggers/list`                 | `list()` — fanned out across every service's Discovery snapshot. |
 | `GET /triggers/:serviceId/:model`    | `get(serviceId, model)`.                                         |
 | `POST /triggers/:serviceId`          | `create(serviceId, body.model, body.active, body.triggers)`.     |
 | `PUT /triggers/:serviceId/:model`    | `update(serviceId, model, { active?, triggers? })`.              |
 | `DELETE /triggers/:serviceId/:model` | `remove(serviceId, model)`.                                      |
+
+`list()`'s route is a bare `@Get()` with no path argument — `@zanix/server` defaults an omitted path
+to the decorated method's own name, so it lands at `/list` under the controller's `triggers` prefix,
+same convention `/templates/list`/`/dlq/list`/`/registry/list` all follow.
 
 Install a real (authenticated) aggregator with `setTriggersAggregator` **before**
 `ZanixAdminHub.start()` — left unset, the controller falls back to a default `TriggersAggregator`
