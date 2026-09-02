@@ -90,9 +90,10 @@ central service must have `RemoteTemplateBackend`'s own `serviceId` registered i
 
 ## `TemplatesHubClient` — calling `/templates` from outside the hub
 
-`TemplatesHubClient` is the thin HTTP client for calling this hub's own `/templates` CRUD routes
-from OUTSIDE the hub process (e.g. an ops UI like `@zanix/console`) — don't confuse it with
-`TemplatesAdminClient`, which calls a business SERVICE's own local `/admin/templates` instead:
+`TemplatesHubClient` is the thin HTTP client for calling this hub's own `/templates` routes — both
+CRUD and `sync` — from OUTSIDE the hub process (e.g. an ops UI like `@zanix/console`) — don't
+confuse it with `TemplatesAdminClient`, which calls a business SERVICE's own local
+`/admin/templates` instead:
 
 ```typescript
 import { TemplatesHubClient } from 'jsr:@zanix/admin@[version]'
@@ -102,12 +103,13 @@ const client = new TemplatesHubClient({
   headers: { 'X-Znx-Authorization': `Bearer ${accessToken}` },
 })
 const templates = await client.list()
+const { seeded, resynced } = await client.sync('billing') // POSTs /templates/sync
 ```
 
-**CRUD only — no `sync()`.** `POST /templates/sync` is composed only on the LOCAL,
-business-service-side `/admin/templates` prefix (`defineAdminMetadata`), not on this hub-side
-`/templates` prefix — `defineAdminHubApp` only ever wires the CRUD half for the hub. A future change
-wiring `sync` onto the hub too would add a matching method to this client then, not before.
+`defineAdminHubApp` composes `POST /templates/sync` alongside the CRUD controller under this same
+hub-side `/templates` prefix, the same pair the LOCAL, business-service-side `/admin/templates`
+prefix (`defineAdminMetadata`) already exposes — `sync('billing')` lets a hub operator seed the
+hub's own central catalog straight from `billing`'s registered Discovery snapshot.
 
 ---
 

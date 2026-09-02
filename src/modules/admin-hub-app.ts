@@ -28,6 +28,7 @@ import { DlqAggregator, setDlqAggregator } from './dlq/dlq.aggregator.ts'
 import { DlqAdminClient } from './dlq/dlq.client.ts'
 import { DiscoveryAdminClient } from './discovery/discovery.client.ts'
 import { setTemplatesDiscoveryClientFactory } from './templates/templates-sync.ts'
+import { createTemplatesSyncController } from './templates/templates-sync.handler.ts'
 import type { RegistryControllerOptions } from './registry/registry.handler.ts'
 import { defineHubTriggersApp } from './triggers/hub-triggers-app.ts'
 import { defineHubTemplatesApp } from './templates/hub-templates-app.ts'
@@ -114,7 +115,10 @@ export interface AdminHubAppOptions {
   triggers?:
     | false
     | (TriggersControllerOptions & { application?: AdminStartApplication })
-  /** Options for the templates route, or `false` to skip registering it entirely. */
+  /** Options for the templates route, or `false` to skip registering it entirely — governs both the
+   * CRUD half (`@zanix/notifications/templates-api`'s `createTemplatesController`) and this
+   * package's own `POST /templates/sync` extension (`createTemplatesSyncController`), always
+   * composed together under the same resolved `prefix`. */
   templates?:
     | false
     | (TemplatesControllerOptions & { application?: AdminStartApplication })
@@ -175,23 +179,27 @@ interface AdminHubModuleEntry<TOptions extends object> {
    * meaning `AdminHubAppOptions.triggers`/`.templates`/`.dlq` already have. */
   options: false | (TOptions & { application?: AdminStartApplication })
   /** Dynamically imports whichever module defines this controller factory, resolving to a
-   * function that SYNCHRONOUSLY builds the controller given `options` (minus `application`) —
-   * called from inside `ProgramModule.defineApplication`'s own synchronous scope callback (see
-   * {@link registerAdminHubModules}), so the controller's `@Controller` decorator attributes to
-   * the right Application. Never resolve/import eagerly outside this — `@Controller` running
-   * outside an active `defineApplication` scope silently attributes to the wrong Application. */
-  importController(): Promise<(options: TOptions) => unknown>
+   * function that SYNCHRONOUSLY builds the controller (or, for an entry composing more than one
+   * controller under the same prefix — e.g. `templates`'s CRUD + `sync` — an array of them) given
+   * `options` (minus `application`) — called from inside `ProgramModule.defineApplication`'s own
+   * synchronous scope callback (see {@link registerAdminHubModules}), so every controller it builds
+   * attributes to the right Application. Never resolve/import eagerly outside this — `@Controller`
+   * running outside an active `defineApplication` scope silently attributes to the wrong
+   * Application. */
+  importController(): Promise<(options: TOptions) => unknown | unknown[]>
 }
 
 /**
- * Registers every ENABLED entry's controller (`entry.options !== false`), each inside its own
+ * Registers every ENABLED entry's controller(s) (`entry.options !== false`), each inside its own
  * resolved `ProgramModule.defineApplication(...)` scope — nestable (see that function's own doc)
  * inside the outer `defineApplication(ADMIN_HUB_APPLICATION, ...)` scope `AppContainer.registerApp`
  * already opened for this call, so a controller attributes to {@link ADMIN_HUB_APPLICATION} by
- * default, or {@link DEFAULT_APPLICATION} when its own `application` option says so. Returns only
- * the controllers actually built (skipped/`false` entries contribute nothing) — callers keep them
- * alive the same way `defineAdminHubMetadata` already did (see {@link registeredControllers}'s own
- * doc for why).
+ * default, or {@link DEFAULT_APPLICATION} when its own `application` option says so. An entry whose
+ * `importController` builds more than one controller (see {@link AdminHubModuleEntry}'s own doc)
+ * returns them as an array, flattened one level here so every caller still gets a flat list. Returns
+ * only the controllers actually built (skipped/`false` entries contribute nothing) — callers keep
+ * them alive the same way `defineAdminHubMetadata` already did (see {@link registeredControllers}'s
+ * own doc for why).
  */
 async function registerAdminHubModules(
   // deno-lint-ignore no-explicit-any
@@ -203,14 +211,14 @@ async function registerAdminHubModules(
     const { application = ADMIN_HUB_APPLICATION, ...controllerOptions } = entry.options
     const createController = await entry.importController()
 
-    let controller: unknown
+    let controller: unknown | unknown[]
     await ProgramModule.defineApplication(application, () => {
       controller = createController(controllerOptions)
     })
     return controller
   }))
 
-  return results.filter((controller) => controller !== undefined)
+  return results.flat().filter((controller) => controller !== undefined)
 }
 
 /**
@@ -389,11 +397,26 @@ async function defineAdminHubMetadata(
           versionProtocol: ADMIN_VERSION_PROTOCOL,
           ...templates,
         },
+        // Two controllers, mounted under the SAME resolved prefix — the CRUD half (authored by
+        // `@zanix/notifications`, needs its own explicit `guards`, see above) and `POST sync`
+        // (this package's own cross-service extension, fully self-contained: bakes in its own
+        // `AuthTokenValidation`, takes only `prefix`) — same composition `metadata.ts`'s local-side
+        // `defineAdminMetadata` already uses for `admin/templates`, mirrored here for the hub's own
+        // `/templates` so a hub can seed its catalog from a registered service's Discovery snapshot
+        // the same way a business service's own embedded admin already can. `prefix` is resolved
+        // once here (defaulting the same way `createTemplatesController` itself does) so both
+        // controllers always land on the exact same route, even when a caller overrides it.
         importController: async () => {
           const templatesApi = await import(NOTIFICATIONS_TEMPLATES_API_SPECIFIER) as {
             createTemplatesController: (options: TemplatesControllerOptions) => unknown
           }
-          return templatesApi.createTemplatesController
+          return (options: TemplatesControllerOptions) => {
+            const { prefix = 'templates', ...rest } = options
+            return [
+              templatesApi.createTemplatesController({ prefix, ...rest }),
+              createTemplatesSyncController({ prefix }),
+            ]
+          }
         },
       },
       {

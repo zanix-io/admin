@@ -17,12 +17,18 @@ import { ADMIN_PROTOCOL_VERSION } from 'utils/constants.ts'
  * package's data. Whoever eventually calls this client (e.g. `@zanix/console`) doesn't change who
  * authors it — the wire-contract owner does. Same shape as `TriggersHubClient`, one domain over.
  *
+ * `list()` calls `/dlq/list`, not bare `/dlq` — `createDlqController`'s own `list()` method is a bare
+ * `@Get()` with no path argument, and `@zanix/server`'s `@Get()` defaults an omitted path to the
+ * decorated method's own name (`'list'`), same convention `TriggersHubClient`'s `/triggers/list` and
+ * `TemplatesHubClient`'s `/templates/list` already follow — confirmed against a real running server
+ * in `start.test.ts`, not assumed from the route's own doc comment.
+ *
  * **Hub-facing, not service-facing** — unlike `DlqAdminClient` (which calls a business SERVICE's own
  * local `/admin/dlq` API directly), this points `baseUrl` at `zanix-admin`'s own hub deployment
  * (`defineAdminHubApp`'s `/dlq`), which itself fans out to/proxies every registered service via
  * `DlqAggregator`. Don't confuse the two levels: constructing this with a business service's own
- * `adminBaseUrl` would hit that service's unrelated (and almost certainly nonexistent) `/dlq` route
- * instead of the hub's.
+ * `adminBaseUrl` would hit that service's unrelated (and almost certainly nonexistent) `/dlq/list`
+ * route instead of the hub's.
  *
  * **The wire shape is NOT identical to `DlqAdminClient`'s** — the hub's own `/dlq` route never
  * accepts `DlqAdminClient`'s `list()` filters (`processType`/`status`/`origin`/`page`/`limit`):
@@ -81,7 +87,7 @@ export class DlqHubClient extends RestClient {
    * why the hub's own route never accepts one).
    */
   public list(): Promise<AggregatedDlqEntry[]> {
-    return this.http.get<AggregatedDlqEntry[]>('/dlq')
+    return this.http.get<AggregatedDlqEntry[]>('/dlq/list')
   }
 
   /** Gets a single dead-letter queue entry by `id` from `serviceId`, proxied through the hub. */

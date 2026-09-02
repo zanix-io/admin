@@ -31,7 +31,7 @@ const DLQ_DEFAULTS = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 }
 
-Deno.test('DlqHubClient.list GETs /dlq on the hub base URL', async () => {
+Deno.test('DlqHubClient.list GETs /dlq/list on the hub base URL', async () => {
   const mockFetch = spy((_url: string, _opts: any) =>
     jsonResponse([{ _id: 'e1', serviceId: 'billing', ...DLQ_DEFAULTS }])
   )
@@ -43,7 +43,7 @@ Deno.test('DlqHubClient.list GETs /dlq on the hub base URL', async () => {
   assertEquals(result, [{ _id: 'e1', serviceId: 'billing', ...DLQ_DEFAULTS }] as never)
   assertSpyCalls(mockFetch, 1)
   const [url, opts] = mockFetch.calls[0].args as [string, any]
-  assertEquals(url, 'http://admin-hub.internal:9000/dlq')
+  assertEquals(url, 'http://admin-hub.internal:9000/dlq/list')
   assertEquals(opts.method, 'GET')
 })
 

@@ -274,10 +274,14 @@ const dlq = new DlqHubClient({ baseUrl: 'http://admin-hub.internal:9000' })
 `@zanix/admin` owns the wire contract for its own hub routes (the routes, their RTOs, and their
 response shapes), the same reason `TriggersAdminClient` already lives here even though it calls out
 to a business service's own admin API — whoever eventually calls a client doesn't change who authors
-it. `TemplatesHubClient` is CRUD-only — the hub never composes `POST /templates/sync` (see
-[`docs/templates-api.md`](./docs/templates-api.md) for why). `DlqHubClient`'s own `list()` always
-returns the full cross-service aggregation (no `DlqAdminClient.list()`-style filters) — see that
-client's own doc for why the hub's own `/dlq` route never accepts one.
+it. `TemplatesHubClient` also exposes `sync()` — the hub composes `POST /templates/sync` alongside
+its CRUD controller, the same pair a business service's own `/admin/templates` already exposes (see
+[`docs/templates-api.md`](./docs/templates-api.md)). `DlqHubClient`'s own `list()` always returns
+the full cross-service aggregation (no `DlqAdminClient.list()`-style filters) — see that client's
+own doc for why the hub's own `/dlq` route never accepts one. Every hub client's own `list()` calls
+its route's `/list` sub-path (`/triggers/list`, `/templates/list`, `/dlq/list`, `/registry/list`) —
+`@Get()` with no path argument defaults to the decorated method's own name, the same convention
+every hub controller's `list()` route follows.
 
 ---
 
@@ -285,12 +289,13 @@ client's own doc for why the hub's own `/dlq` route never accepts one.
 
 `ServiceRegistry` is the static list of known services `TriggersAggregator` fans out to and proxies
 against — configure it in code (constructor entries), via the `ZANIX_ADMIN_SERVICES` env var, or
-both. `defineAdminHubApp` always composes a read-only `GET /registry` (`createRegistryController`)
-reflecting it — unlike `/triggers`/`/templates`/`/dlq`, there is no `registry: false` opt-out, since
-the registry always exists regardless of which of those three are enabled.
+both. `defineAdminHubApp` always composes a read-only `GET /registry/list`
+(`createRegistryController`) reflecting it — unlike `/triggers`/`/templates`/`/dlq`, there is no
+`registry: false` opt-out, since the registry always exists regardless of which of those three are
+enabled.
 
 See [`docs/service-registry.md`](./docs/service-registry.md) for the full configuration reference,
-including `GET /registry` and `RegistryHubClient`.
+including `GET /registry/list` and `RegistryHubClient`.
 
 ---
 
