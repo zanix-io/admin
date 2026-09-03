@@ -10,6 +10,7 @@
     "jsr:@std/assert@^1.0.19": "1.0.19",
     "jsr:@std/async@^1.0.0-rc.1": "1.5.0",
     "jsr:@std/cli@~0.224.7": "0.224.7",
+    "jsr:@std/crypto@^1.1.0": "1.1.0",
     "jsr:@std/encoding@1": "1.0.11",
     "jsr:@std/encoding@1.0.0-rc.2": "1.0.0-rc.2",
     "jsr:@std/fmt@0.224": "0.224.0",
@@ -29,19 +30,15 @@
     "jsr:@std/semver@^1.0.8": "1.0.8",
     "jsr:@std/streams@~0.224.5": "0.224.5",
     "jsr:@std/testing@1.0.20": "1.0.20",
-    "jsr:@zanix/app@~0.2.1": "0.2.1",
+    "jsr:@zanix/app@1": "1.0.2",
     "jsr:@zanix/asyncmq@0.8": "0.8.0",
-    "jsr:@zanix/auth@0.8.1": "0.8.1",
-    "jsr:@zanix/auth@1": "1.0.0",
-    "jsr:@zanix/auth@~0.8.1": "0.8.1",
+    "jsr:@zanix/auth@1": "1.1.1",
     "jsr:@zanix/datamaster@^1.7.0": "1.9.0",
-    "jsr:@zanix/datamaster@^1.8.0": "1.9.0",
     "jsr:@zanix/datamaster@^1.9.0": "1.9.0",
-    "jsr:@zanix/notifications@0.7": "0.7.0",
-    "jsr:@zanix/notifications@1": "1.0.0",
-    "jsr:@zanix/server@4": "4.1.0",
-    "jsr:@zanix/utils@4": "4.1.0",
-    "jsr:@zanix/utils@^4.1.0": "4.1.0",
+    "jsr:@zanix/notifications@1": "1.1.0",
+    "jsr:@zanix/server@4": "4.2.0",
+    "jsr:@zanix/utils@4": "4.2.0",
+    "jsr:@zanix/utils@^4.1.0": "4.2.0",
     "npm:handlebars@^4.7.8": "4.7.9",
     "npm:mongoose@8": "8.24.4",
     "npm:redis@^5.9.0": "5.12.1"
@@ -80,6 +77,9 @@
     },
     "@std/cli@0.224.7": {
       "integrity": "654ca6477518e5e3a0d3fabafb2789e92b8c0febf1a1d24ba4b567aba94b5977"
+    },
+    "@std/crypto@1.1.0": {
+      "integrity": "b8d6d0a6377a32b213af2661ed7bf1062d94feac0c57def5526a8e74a95c3ec8"
     },
     "@std/encoding@1.0.0-rc.2": {
       "integrity": "160d7674a20ebfbccdf610b3801fee91cf6e42d1c106dd46bbaf46e395cd35ef"
@@ -158,8 +158,8 @@
         "jsr:@std/assert@^1.0.19"
       ]
     },
-    "@zanix/app@0.2.1": {
-      "integrity": "5461c543a95f1e6a7be754d5a0b32bd28618c6cb6dc448644b717e4fd717462d",
+    "@zanix/app@1.0.2": {
+      "integrity": "039f1109d2cfd27178ef6856317655ee09c777419bd1fb83cc9a7481b6bf4aba",
       "dependencies": [
         "jsr:@std/semver",
         "jsr:@zanix/asyncmq",
@@ -175,15 +175,8 @@
         "jsr:@zanix/utils@4"
       ]
     },
-    "@zanix/auth@0.8.1": {
-      "integrity": "0c6cfac247238b2784b739dc57d74403242ba6f78abf3edc4f0e8b11ec9cfbae",
-      "dependencies": [
-        "jsr:@zanix/server",
-        "jsr:@zanix/utils@4"
-      ]
-    },
-    "@zanix/auth@1.0.0": {
-      "integrity": "b2a71f66f342d376b1c73b72b00454ed309703d7b45705e3f75367e832e19b8f",
+    "@zanix/auth@1.1.1": {
+      "integrity": "1963fb4255079808831e1046eedab88c79e21fda6a5de5e3fd20f0780bb4a1cc",
       "dependencies": [
         "jsr:@zanix/datamaster@^1.9.0",
         "jsr:@zanix/server",
@@ -200,37 +193,28 @@
         "npm:redis"
       ]
     },
-    "@zanix/notifications@0.7.0": {
-      "integrity": "e04a8169659b26b13964b05c511fe83453df74da45e9758477dc280a76a0c8c3",
+    "@zanix/notifications@1.1.0": {
+      "integrity": "22aa9fa76bec753d535c777ee1f6dd228814bc483dca21d0767e595c0ed795b1",
       "dependencies": [
-        "jsr:@zanix/auth@~0.8.1",
-        "jsr:@zanix/datamaster@^1.8.0",
-        "jsr:@zanix/server",
-        "jsr:@zanix/utils@4",
-        "npm:handlebars"
-      ]
-    },
-    "@zanix/notifications@1.0.0": {
-      "integrity": "67f94d5a1dced923431a911b77a7bca96b088c1ecdef88c65d824e5dfffd1cbb",
-      "dependencies": [
-        "jsr:@zanix/auth@1",
+        "jsr:@zanix/auth",
         "jsr:@zanix/datamaster@^1.9.0",
         "jsr:@zanix/server",
         "jsr:@zanix/utils@4",
         "npm:handlebars"
       ]
     },
-    "@zanix/server@4.1.0": {
-      "integrity": "3ff98b49ec2d84cc8bd0db7be40175248e79d04f247664c209b37a4b9c92c518",
+    "@zanix/server@4.2.0": {
+      "integrity": "827ae993a8c785cc3fe2a295afded82fa7ee5d693435e05b65a5fca0f296d0ce",
       "dependencies": [
         "jsr:@std/http",
         "jsr:@std/path@0.224",
         "jsr:@zanix/utils@^4.1.0"
       ]
     },
-    "@zanix/utils@4.1.0": {
-      "integrity": "3b223433ddbfac0a33edf1a985092f5ea947ccaed0142f016495bec4e42dce9b",
+    "@zanix/utils@4.2.0": {
+      "integrity": "11a2053930b25de2d0fc7f920c1c05d8c1915bd95d769d9a994bc5e89dadc79f",
       "dependencies": [
+        "jsr:@std/crypto",
         "jsr:@std/fmt@0.224",
         "jsr:@std/path@0.224"
       ]
@@ -412,7 +396,7 @@
       "jsr:@std/assert@1.0.19",
       "jsr:@std/path@0.224",
       "jsr:@std/testing@1.0.20",
-      "jsr:@zanix/app@~0.2.1",
+      "jsr:@zanix/app@1",
       "jsr:@zanix/auth@1",
       "jsr:@zanix/datamaster@^1.9.0",
       "jsr:@zanix/notifications@1",
