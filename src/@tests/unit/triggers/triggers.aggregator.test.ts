@@ -287,7 +287,35 @@ Deno.test({
 
 Deno.test({
   name:
-    "TriggersAggregator.list logs (logger.error) and rethrows unchanged when one service's Discovery fetch fails",
+    'TriggersAggregator.list (default, tolerant) logs (logger.error) and SKIPS a service whose Discovery fetch fails, still returning the rest',
+  fn: async () => {
+    const boom = new Error('network down')
+    const discoveryClientFactory: TriggersDiscoveryClientFactory = (service) =>
+      service.serviceId === 'billing'
+        ? fakeDiscoveryClient(() => Promise.reject(boom))
+        : fakeDiscoveryClient(() => Promise.resolve([{ model: 'Item', ...TRIGGER_DEFAULTS }]))
+    const errorStub = stub(logger, 'error')
+
+    try {
+      const aggregator = new TriggersAggregator(registry, undefined, discoveryClientFactory)
+
+      const result = await aggregator.list()
+      assertEquals(result, [{ model: 'Item', ...TRIGGER_DEFAULTS, serviceId: 'inventory' }])
+
+      assertEquals(errorStub.calls.length, 1)
+      assertEquals(errorStub.calls[0].args[1], boom)
+      const message = String(errorStub.calls[0].args[0])
+      assert(message.includes('ADMIN_TRIGGERS_DISCOVERY_FAILED'))
+      assert(message.includes('billing'))
+    } finally {
+      errorStub.restore()
+    }
+  },
+})
+
+Deno.test({
+  name:
+    "TriggersAggregator.list ({ strict: true }) logs (logger.error) and rethrows unchanged when one service's Discovery fetch fails",
   fn: async () => {
     const boom = new Error('network down')
     const discoveryClientFactory: TriggersDiscoveryClientFactory = () =>
@@ -299,6 +327,7 @@ Deno.test({
         new ServiceRegistry([{ serviceId: 'billing', adminBaseUrl: 'http://billing.internal' }]),
         undefined,
         discoveryClientFactory,
+        { strict: true },
       )
 
       const rejected = await assertRejects(() => aggregator.list())

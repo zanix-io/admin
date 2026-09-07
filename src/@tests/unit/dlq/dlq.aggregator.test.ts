@@ -290,7 +290,35 @@ Deno.test({
 
 Deno.test({
   name:
-    "DlqAggregator.list logs (logger.error) and rethrows unchanged when one service's Discovery fetch fails",
+    'DlqAggregator.list (default, tolerant) logs (logger.error) and SKIPS a service whose Discovery fetch fails, still returning the rest',
+  fn: async () => {
+    const boom = new Error('network down')
+    const discoveryClientFactory: DlqDiscoveryClientFactory = (service) =>
+      service.serviceId === 'billing'
+        ? fakeDiscoveryClient(() => Promise.reject(boom))
+        : fakeDiscoveryClient(() => Promise.resolve([{ _id: 'e2', ...DLQ_DEFAULTS }]))
+    const errorStub = stub(logger, 'error')
+
+    try {
+      const aggregator = new DlqAggregator(registry, undefined, discoveryClientFactory)
+
+      const result = await aggregator.list()
+      assertEquals(result, [{ _id: 'e2', ...DLQ_DEFAULTS, serviceId: 'inventory' }])
+
+      assertEquals(errorStub.calls.length, 1)
+      assertEquals(errorStub.calls[0].args[1], boom)
+      const message = String(errorStub.calls[0].args[0])
+      assert(message.includes('ADMIN_DLQ_DISCOVERY_FAILED'))
+      assert(message.includes('billing'))
+    } finally {
+      errorStub.restore()
+    }
+  },
+})
+
+Deno.test({
+  name:
+    "DlqAggregator.list ({ strict: true }) logs (logger.error) and rethrows unchanged when one service's Discovery fetch fails",
   fn: async () => {
     const boom = new Error('network down')
     const discoveryClientFactory: DlqDiscoveryClientFactory = () =>
@@ -302,6 +330,7 @@ Deno.test({
         new ServiceRegistry([{ serviceId: 'billing', adminBaseUrl: 'http://billing.internal' }]),
         undefined,
         discoveryClientFactory,
+        { strict: true },
       )
 
       const rejected = await assertRejects(() => aggregator.list())
