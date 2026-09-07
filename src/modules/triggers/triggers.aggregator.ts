@@ -9,6 +9,10 @@ import type { ServiceRegistry } from 'modules/registry/registry.ts'
 import logger from '@zanix/logger'
 import { TriggersAdminClient } from './triggers.client.ts'
 import { DiscoveryAdminClient } from 'modules/discovery/discovery.client.ts'
+import {
+  fanOutDiscovery,
+  type FanOutDiscoveryOptions,
+} from 'modules/discovery/discovery.fan-out.ts'
 import { getServiceRegistry } from 'modules/registry/registry.ts'
 
 /** A trigger entry fanned out from `list()`, tagged with which registered service it came from. */
@@ -54,61 +58,56 @@ const defaultDiscoveryClientFactory: TriggersDiscoveryClientFactory = (
  * to that service's own `/admin/triggers` CRUD API — this class never touches another service's
  * database directly.
  *
- * A single service failing during `list()`'s fan-out fails the whole call (via `Promise.all`) —
- * deliberately simple for now; a deployment that needs partial-failure tolerance (some services
- * unreachable, still show the rest) should catch per-service instead, e.g. by supplying a
- * `discoveryClientFactory` that already wraps failures into an empty result, or by composing its
- * own `Promise.allSettled` around `registry.list()` directly.
+ * `list()`'s fan-out defaults to `Promise.allSettled` semantics via the shared `fanOutDiscovery`
+ * helper: a single service failing is logged and skipped, so the rest of the aggregate still comes
+ * back — see `fanOutDiscovery`'s own doc for why that's the right default. Pass `{ strict: true }`
+ * to the constructor to revert to the old, strict `Promise.all` behavior (the first failing service
+ * rejects the whole call) for a deployment that genuinely needs all-or-nothing consistency.
  */
 export class TriggersAggregator {
   #registry: ServiceRegistry
   #createClient: TriggersClientFactory
   #createDiscoveryClient: TriggersDiscoveryClientFactory
+  #fanOutOptions: FanOutDiscoveryOptions
 
   /**
    * Builds the aggregator against `registry`, defaulting `clientFactory`/`discoveryClientFactory`
    * to unauthenticated `TriggersAdminClient`/`DiscoveryAdminClient` instances when not given.
+   * @param fanOutOptions - Controls `list()`'s per-service failure handling — see
+   * {@link FanOutDiscoveryOptions}. Defaults to `{}` (tolerant: a failing service is skipped).
    */
   constructor(
     registry: ServiceRegistry,
     clientFactory: TriggersClientFactory = defaultClientFactory,
     discoveryClientFactory: TriggersDiscoveryClientFactory = defaultDiscoveryClientFactory,
+    fanOutOptions: FanOutDiscoveryOptions = {},
   ) {
     this.#registry = registry
     this.#createClient = clientFactory
     this.#createDiscoveryClient = discoveryClientFactory
+    this.#fanOutOptions = fanOutOptions
   }
 
   /**
    * Fans out to every registered service's own `/.well-known/zanix/triggers` Discovery snapshot,
    * tagged by origin `serviceId`. A read-only operation, so it goes through Discovery rather than
-   * the CRUD API's `/admin/triggers/list` — see this class's own doc.
+   * the CRUD API's `/admin/triggers/list` — see this class's own doc. Per-service failure handling
+   * (skip vs. reject the whole call) is controlled by the `fanOutOptions` given to the constructor.
    */
-  public async list(): Promise<AggregatedTrigger[]> {
-    const services = this.#registry.list()
-
-    const perService = await Promise.all(services.map(async (service) => {
-      try {
-        const client = await this.#createDiscoveryClient(service)
-        const triggers = await client.snapshot<TriggersModelAttrs>('triggers')
-        return triggers.map((trigger) => ({
-          ...trigger,
-          serviceId: service.serviceId,
-        }))
-      } catch (error) {
-        // Logged (not swallowed) — see this class's own doc: a single service failing here fails
-        // the whole `Promise.all` fan-out, so this is the only chance to record WHICH service was
-        // the culprit before the aggregate rejection loses that detail.
+  public list(): Promise<AggregatedTrigger[]> {
+    return fanOutDiscovery<TriggersModelAttrs>(
+      this.#registry,
+      this.#createDiscoveryClient,
+      'triggers',
+      (service, error) => {
         logger.error(
           `[ADMIN_TRIGGERS_DISCOVERY_FAILED] Failed to fetch the triggers Discovery snapshot from ` +
             `registered service "${service.serviceId}" (${service.adminBaseUrl}).`,
           error,
         )
-        throw error
-      }
-    }))
-
-    return perService.flat()
+      },
+      this.#fanOutOptions,
+    )
   }
 
   /** Gets a single trigger entry from the given service. */
