@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/) and this project
 adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [2.3.2] - 2026-09-07
+
+### Fixed
+
+- **`TriggersAggregator.list()`/`DlqAggregator.list()`** no longer fail the whole fan-out when a
+  single registered service's Discovery snapshot fetch fails (network error, or that capability
+  simply not configured yet on that one service — e.g. DLQ, which is opt-in). Each hand-rolled its
+  own `Promise.all` fan-out, so one degraded service blacked out every other service's own
+  successful result — observed in production as a `502` on `/dlq/list` while every other service's
+  DLQ data was actually reachable. Both now default to `Promise.allSettled` semantics via a new
+  shared `fanOutDiscovery()` helper (`modules/discovery/discovery.fan-out.ts`): a failing service is
+  logged and skipped instead. Both aggregators' constructors gain an optional 4th `fanOutOptions`
+  argument — pass `{ strict: true }` to keep the old, strict `Promise.all` (all-or-nothing) behavior
+  for a deployment that genuinely needs it.
+
 ## [2.3.1] - 2026-09-03
 
 ### Changed
