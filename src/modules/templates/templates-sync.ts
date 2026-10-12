@@ -81,7 +81,8 @@ export const getTemplatesDiscoveryClientFactory = (): TemplatesDiscoveryClientFa
  * every subpath, so a deployment with templates disabled must never resolve it merely because this
  * module is reachable.
  *
- * @throws {InternalError} If `serviceId` isn't registered — see `ServiceRegistry.get`.
+ * @throws {HttpError} `NOT_FOUND` (code `UNKNOWN_SERVICE`) if `serviceId` isn't registered — see
+ * `ServiceRegistry.get`.
  */
 export async function syncTemplatesFromRegisteredService(
   serviceId: string,

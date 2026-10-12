@@ -1,6 +1,6 @@
 import type { ServiceRegistryEntry } from 'typings/registry.ts'
 
-import { InternalError } from '@zanix/errors'
+import { HttpError, InternalError } from '@zanix/errors'
 
 /**
  * Env var carrying the static service registry as a JSON array of {@link ServiceRegistryEntry} —
@@ -40,7 +40,8 @@ export class ServiceRegistry {
 
   /**
    * Looks up a registered service by its `serviceId`.
-   * @throws {InternalError} If no entry is registered for `serviceId`.
+   * @throws {HttpError} `NOT_FOUND` (404) with code `UNKNOWN_SERVICE` if no entry is registered for
+   * `serviceId` — a caller-supplied identifier that names nothing, not a server fault.
    */
   public get(serviceId: string): ServiceRegistryEntry {
     const entry = this.#entries.get(serviceId)
@@ -48,13 +49,11 @@ export class ServiceRegistry {
     if (!entry) {
       // No `cause` here, unlike `readFromEnv`'s own throw below — this is a lookup miss against
       // `#entries`, not a caught exception, so there's no underlying error to attach.
-      throw new InternalError(
-        `No registered service found for "${serviceId}".`,
-        {
-          code: 'UNKNOWN_SERVICE',
-          meta: { source: 'zanix', serviceId },
-        },
-      )
+      throw new HttpError('NOT_FOUND', {
+        message: `No registered service found for "${serviceId}".`,
+        code: 'UNKNOWN_SERVICE',
+        meta: { source: 'zanix', serviceId },
+      })
     }
 
     return entry

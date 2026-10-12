@@ -1,7 +1,7 @@
 // deno-lint-ignore-file no-explicit-any
 import { assert, assertEquals, assertRejects } from '@std/assert'
 import { stub } from '@std/testing/mock'
-import { InternalError } from '@zanix/errors'
+import { HttpError } from '@zanix/errors'
 import logger from '@zanix/logger'
 import { ServiceRegistry } from 'modules/registry/registry.ts'
 import {
@@ -212,7 +212,7 @@ Deno.test({
     // synchronous throw — `assertRejects`, not `assertThrows`.
     await assertRejects(
       () => aggregator.get('unknown-service', 'e1'),
-      InternalError,
+      HttpError,
     )
     assertEquals(called, false)
   },

@@ -554,3 +554,14 @@ Deno.test({
     }
   },
 })
+
+Deno.test('syncTemplatesFromRegisteredService throws 404 UNKNOWN_SERVICE for an unregistered serviceId', async () => {
+  setServiceRegistry(new ServiceRegistry([]))
+
+  const error = await assertRejects(
+    () => syncTemplatesFromRegisteredService('ghost', 'admin-1'),
+    HttpError,
+  )
+  assertEquals(error.status.value, 404)
+  assertEquals(error.code, 'UNKNOWN_SERVICE')
+})

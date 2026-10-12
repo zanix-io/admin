@@ -51,8 +51,11 @@ service_ to pull from:
 
 `serviceId` is looked up in the shared `ServiceRegistry` (see
 [Service Registry](./service-registry.md) — the same registry `TriggersAggregator` uses), resolving
-that service's own base URL. This package then pulls from whichever of two Discovery resources that
-service exposes, **preferring the richer one**:
+that service's own base URL. An unregistered `serviceId` answers `404` (`NOT_FOUND`) with the stable
+code `UNKNOWN_SERVICE` in the body — a caller-supplied identifier that names nothing, so a client
+error, not a server fault; callers such as `RemoteTemplateBackend` detect it by that code. This
+package then pulls from whichever of two Discovery resources that service exposes, **preferring the
+richer one**:
 
 1. **`/.well-known/zanix/templates`** — that service's own DB-backed Discovery (this package's own,
    only present when the target has `admin` + DB-backed templates enabled) — its real,

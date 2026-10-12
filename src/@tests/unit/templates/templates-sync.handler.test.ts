@@ -1,8 +1,9 @@
 // deno-lint-ignore-file no-explicit-any
-import { assertEquals } from '@std/assert'
+import { assertEquals, assertRejects } from '@std/assert'
 import { stub } from '@std/testing/mock'
 import type { HandlerContext } from '@zanix/server'
 import { ProgramModule } from '@zanix/server'
+import { HttpError } from '@zanix/errors'
 import { createTemplatesSyncController } from 'modules/templates/templates-sync.handler.ts'
 import { ServiceRegistry, setServiceRegistry } from 'modules/registry/registry.ts'
 
@@ -90,4 +91,19 @@ Deno.test("TemplatesSyncController.sync falls back to 'unknown' with no session"
   await withSyncEnv(calls, () => handler.sync.call(fakeThis(), ctx))
 
   assertEquals(calls[0][1], 'unknown')
+})
+
+Deno.test('TemplatesSyncController.sync rejects an unregistered serviceId with 404 UNKNOWN_SERVICE', async () => {
+  setServiceRegistry(new ServiceRegistry([]))
+  const ctx = { payload: { body: { serviceId: 'ghost' } } } as HandlerContext<never>
+
+  const error = await assertRejects(
+    () => handler.sync.call(fakeThis(), ctx),
+    HttpError,
+    'No registered service found for "ghost".',
+  )
+  assertEquals(error.status.value, 404)
+  assertEquals(error.status.code, 'NOT_FOUND')
+  assertEquals(error.code, 'UNKNOWN_SERVICE')
+  assertEquals(error.meta, { source: 'zanix', serviceId: 'ghost' })
 })

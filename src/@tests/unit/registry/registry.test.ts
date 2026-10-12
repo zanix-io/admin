@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertFalse, assertThrows } from '@std/assert'
-import { InternalError } from '@zanix/errors'
+import { HttpError, InternalError } from '@zanix/errors'
 import { SERVICE_REGISTRY_ENV, ServiceRegistry } from 'modules/registry/registry.ts'
 
 console.error = () => {}
@@ -18,14 +18,17 @@ Deno.test('ServiceRegistry.get returns a registered entry', () => {
   })
 })
 
-Deno.test('ServiceRegistry.get throws InternalError for an unregistered serviceId', () => {
+Deno.test('ServiceRegistry.get throws a 404 HttpError (UNKNOWN_SERVICE) for an unregistered serviceId', () => {
   const registry = new ServiceRegistry([])
 
-  assertThrows(
+  const error = assertThrows(
     () => registry.get('unknown'),
-    InternalError,
-    'No registered service found',
+    HttpError,
+    'No registered service found for "unknown".',
   )
+  assertEquals(error.status, { code: 'NOT_FOUND', value: 404 })
+  assertEquals(error.code, 'UNKNOWN_SERVICE')
+  assertEquals(error.meta, { source: 'zanix', serviceId: 'unknown' })
 })
 
 Deno.test('ServiceRegistry.has reflects registration without throwing', () => {

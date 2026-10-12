@@ -40,6 +40,11 @@ Left uninstalled, both consumers lazily build their own default instance the fir
 needs it (entries from `ZANIX_ADMIN_SERVICES` only) — the same instance from then on, since the
 first lazy build installs itself as the shared one.
 
+`get(serviceId)` throws an `HttpError` `NOT_FOUND` (HTTP `404`) with code `UNKNOWN_SERVICE` and meta
+`{ source: 'zanix', serviceId }` when nothing is registered under that id; use `has(serviceId)` to
+check without throwing. Every route that resolves a `serviceId` through the registry (templates
+sync, triggers, DLQ) therefore answers `404` for an unknown one.
+
 ---
 
 ## Reachability validation
