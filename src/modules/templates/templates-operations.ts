@@ -1,8 +1,10 @@
 import type { OperationDeclaration } from '@zanix/app'
 import type {
   CreateTemplateInput,
+  TemplatePreview,
   UpdateTemplateInput,
   ZanixTemplateAttrs,
+  ZanixTemplateMessageAttrs,
 } from '@zanix/notifications/templates-types'
 import type { NotifiersLike } from '../lazy/notifications-shim.ts'
 
@@ -40,7 +42,8 @@ const OPERATION_UPDATED_BY = 'zanix-operation'
  * not a source of real latency, so gating it behind one microtask has no practical cost for a
  * deployment that DOES use templates.
  *
- * Only `listTemplates`/`getTemplate` (read-only) opt into `mcp` — giving an agent unrestricted
+ * Only the read-only operations (`listTemplates`/`getTemplate`/`listMessages`/`listMessageEntries`/
+ * `previewTemplate`) opt into `mcp` — giving an agent unrestricted
  * write access to notification templates is a real risk (a misconfigured template can break an
  * entire notification channel) that needs its own deliberate decision, not a default.
  */
@@ -95,6 +98,101 @@ export function buildTemplatesOperations(
           changes,
           OPERATION_UPDATED_BY,
         )
+      },
+    },
+    listMessages: {
+      handler: async (payload) => {
+        const { langs } = (payload ?? {}) as { langs?: string[] }
+        const TemplatesAdminService = await resolveTemplatesAdminService()
+        return resolveTarget(appName, TemplatesAdminService).listMessages(langs)
+      },
+      mcp: {
+        description: 'Lists the notification message catalog (texts by language and key).',
+        inputSchema: {
+          type: 'object',
+          properties: { langs: { type: 'array', items: { type: 'string' } } },
+        },
+      },
+    },
+    listMessageEntries: {
+      handler: async (payload) => {
+        const options = (payload ?? {}) as { langs?: string[]; search?: string }
+        const TemplatesAdminService = await resolveTemplatesAdminService()
+        const entries = await resolveTarget(appName, TemplatesAdminService)
+          .listMessageEntries(options)
+        return { entries }
+      },
+      mcp: {
+        description:
+          'Lists the message catalog texts with their source (code/database), default and edit state.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            langs: { type: 'array', items: { type: 'string' } },
+            search: { type: 'string' },
+          },
+        },
+      },
+    },
+    setMessage: {
+      handler: async (payload): Promise<ZanixTemplateMessageAttrs> => {
+        const { lang, key, text } = payload as { lang: string; key: string; text: string }
+        const TemplatesAdminService = await resolveTemplatesAdminService()
+        return resolveTarget(appName, TemplatesAdminService).setMessage(
+          lang,
+          key,
+          text,
+          OPERATION_UPDATED_BY,
+        )
+      },
+    },
+    removeMessage: {
+      handler: async (payload) => {
+        const { lang, key } = payload as { lang: string; key: string }
+        const TemplatesAdminService = await resolveTemplatesAdminService()
+        await resolveTarget(appName, TemplatesAdminService).removeMessage(lang, key)
+        return { removed: `${lang}/${key}` }
+      },
+    },
+    resetMessage: {
+      handler: async (payload): Promise<ZanixTemplateMessageAttrs> => {
+        const { lang, key } = payload as { lang: string; key: string }
+        const TemplatesAdminService = await resolveTemplatesAdminService()
+        return resolveTarget(appName, TemplatesAdminService).resetMessage(
+          lang,
+          key,
+          OPERATION_UPDATED_BY,
+        )
+      },
+    },
+    previewTemplate: {
+      handler: async (payload): Promise<TemplatePreview> => {
+        const { channel, name, data, lang } = payload as {
+          channel: NotifiersLike
+          name: string
+          data?: Record<string, unknown>
+          lang?: string
+        }
+        const TemplatesAdminService = await resolveTemplatesAdminService()
+        return resolveTarget(appName, TemplatesAdminService).preview(
+          channel,
+          name,
+          data ?? {},
+          lang,
+        )
+      },
+      mcp: {
+        description: 'Renders a template with the given data and language, without sending it.',
+        inputSchema: {
+          type: 'object',
+          required: ['channel', 'name'],
+          properties: {
+            channel: { type: 'string' },
+            name: { type: 'string' },
+            data: { type: 'object' },
+            lang: { type: 'string' },
+          },
+        },
       },
     },
     removeTemplate: {

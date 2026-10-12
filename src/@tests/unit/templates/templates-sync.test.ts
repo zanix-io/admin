@@ -59,6 +59,10 @@ function stubSyncCodeTemplates(syncCalls: unknown[]) {
   )
 }
 
+// The real `toSyncCodeTemplateEntries` may emit optional keys (`availableVariables`/`styles`) as
+// explicit `undefined`; they carry no meaning on the wire, so compare through JSON.
+const withoutUndefined = (value: unknown): unknown => JSON.parse(JSON.stringify(value))
+
 Deno.test({
   name:
     "syncTemplatesFromRegisteredService falls back to code-templates when the target has no DB-backed templates ('templates' 404s), merges via TemplatesAdminRepository.syncCodeTemplates",
@@ -89,7 +93,7 @@ Deno.test({
       )
 
       assertEquals(result, { seeded: 1, resynced: 0 })
-      assertEquals(syncCalls, [
+      assertEquals(withoutUndefined(syncCalls), [
         [
           [{ channel: 'email', name: 'generic', hbs: '<p>hi</p>', hash: 'h1' }],
           'admin-1',
@@ -161,7 +165,7 @@ Deno.test({
       // Normalized down to the SyncCodeTemplateEntry shape — source/active/version don't survive,
       // since `syncCodeTemplates` treats every entry as this service's own authoritative default
       // regardless of how the ORIGIN classified it internally.
-      assertEquals(syncCalls, [
+      assertEquals(withoutUndefined(syncCalls), [
         [
           [{
             channel: 'email',
@@ -235,7 +239,7 @@ Deno.test({
     try {
       await syncTemplatesFromRegisteredService('billing', 'admin-1')
 
-      assertEquals(syncCalls, [
+      assertEquals(withoutUndefined(syncCalls), [
         [
           [{ channel: 'email', name: 'generic', hbs: '<p>hi</p>', hash: 'h1' }],
           'admin-1',

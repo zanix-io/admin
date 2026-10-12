@@ -111,6 +111,28 @@ hub-side `/templates` prefix, the same pair the LOCAL, business-service-side `/a
 prefix (`defineAdminMetadata`) already exposes — `sync('billing')` lets a hub operator seed the
 hub's own central catalog straight from `billing`'s registered Discovery snapshot.
 
+### The message catalog and previews
+
+Both clients (`TemplatesHubClient` on `/templates`, `TemplatesAdminClient` on `/admin/templates`)
+also reach the message catalog (`{{t 'key'}}` texts) and the template preview that
+`@zanix/notifications/templates-api` exposes, under the same guard as the CRUD routes:
+
+```typescript
+const catalog = await client.listMessages(['es', 'en']) // { es: { key: text }, en: { ... } }
+const entries = await client.listMessageEntries({ langs: ['es'], search: 'welcome' }) // MessageEntry[]
+await client.setMessage('es', 'welcome.title', 'Hola') // PUT messages/:lang/:key
+await client.resetMessage('es', 'welcome.title') // back to the code default (code texts only)
+await client.removeMessage('es', 'welcome.title')
+const { body, subject } = await client.previewTemplate('email', 'welcome', {
+  data: { name: 'Ana' },
+  lang: 'es',
+})
+```
+
+The same operations exist as `operations` of the templates sub-apps: `listMessages`,
+`listMessageEntries`, `previewTemplate` (read-only, also `mcp`), and `setMessage`, `removeMessage`,
+`resetMessage` (mutating, no `mcp`).
+
 ---
 
 ## `createTemplatesDiscoveryGuard` — one guard, shared by two Discovery endpoints

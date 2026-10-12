@@ -177,6 +177,34 @@ Deno.test('local admin app: removeTrigger forwards {model}, reports deleted', as
 })
 
 Deno.test(
+  'local admin app: listMessages and setMessage forward to TemplatesAdminService',
+  async () => {
+    const listStub = stub(
+      TemplatesAdminService.prototype,
+      'listMessages',
+      (langs?: string[]) => Promise.resolve({ es: { langs: String(langs) } }),
+    )
+    const setStub = stub(
+      TemplatesAdminService.prototype,
+      'setMessage',
+      (...args: unknown[]) => Promise.resolve({ args } as never),
+    )
+    try {
+      const list = getOperation('listMessages')
+      assertEquals(await list.handler({ langs: ['es'] }, list.ctx), { es: { langs: 'es' } })
+      const set = getOperation('setMessage')
+      assertEquals(
+        await set.handler({ lang: 'es', key: 'hi', text: 'hola' }, set.ctx),
+        { args: ['es', 'hi', 'hola', 'zanix-operation'] },
+      )
+    } finally {
+      listStub.restore()
+      setStub.restore()
+    }
+  },
+)
+
+Deno.test(
   'local admin app: listTemplates forwards to TemplatesAdminService.list()',
   async () => {
     const listStub = stub(

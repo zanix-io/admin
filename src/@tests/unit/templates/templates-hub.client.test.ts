@@ -145,3 +145,91 @@ Deno.test('TemplatesHubClient has a sync() — the hub composes /templates/sync 
 
   assertEquals('sync' in client, true)
 })
+
+Deno.test('TemplatesHubClient.listMessages GETs /templates/messages, with the langs escaped when given', async () => {
+  const mockFetch = spy((_url: string, _opts: any) => jsonResponse({ es: { hi: 'hola' } }))
+  globalThis.fetch = mockFetch as unknown as typeof fetch
+
+  const client = new TemplatesHubClient({ baseUrl: 'http://svc.internal:1234' })
+  assertEquals(await client.listMessages(['es', 'en']), { es: { hi: 'hola' } })
+  await client.listMessages()
+
+  const [url, opts] = mockFetch.calls[0].args as [string, any]
+  assertEquals(url, 'http://svc.internal:1234/templates/messages?langs=es%2Cen')
+  assertEquals(opts.method, 'GET')
+  assertEquals(
+    (mockFetch.calls[1].args as [string, any])[0],
+    'http://svc.internal:1234/templates/messages',
+  )
+})
+
+Deno.test('TemplatesHubClient.listMessageEntries GETs /templates/message-entries and unwraps entries', async () => {
+  const entry = { lang: 'es', key: 'hi', text: 'hola', source: 'code', edited: false, version: 1 }
+  const mockFetch = spy((_url: string, _opts: any) => jsonResponse({ entries: [entry] }))
+  globalThis.fetch = mockFetch as unknown as typeof fetch
+
+  const client = new TemplatesHubClient({ baseUrl: 'http://svc.internal:1234' })
+  assertEquals(await client.listMessageEntries({ langs: ['es'], search: 'a b' }), [entry])
+
+  const [url] = mockFetch.calls[0].args as [string, any]
+  assertEquals(url, 'http://svc.internal:1234/templates/message-entries?langs=es&q=a+b')
+})
+
+Deno.test('TemplatesHubClient.setMessage PUTs the text to /templates/messages/:lang/:key, key escaped', async () => {
+  const mockFetch = spy((_url: string, opts: any) => {
+    assertEquals(opts.method, 'PUT')
+    assertEquals(JSON.parse(opts.body), { text: 'hola' })
+    return jsonResponse({ lang: 'es', key: 'a.b', text: 'hola' })
+  })
+  globalThis.fetch = mockFetch as unknown as typeof fetch
+
+  const client = new TemplatesHubClient({ baseUrl: 'http://svc.internal:1234' })
+  await client.setMessage('es', 'a/b', 'hola')
+
+  const [url] = mockFetch.calls[0].args as [string, any]
+  assertEquals(url, 'http://svc.internal:1234/templates/messages/es/a%2Fb')
+})
+
+Deno.test('TemplatesHubClient.removeMessage DELETEs /templates/messages/:lang/:key', async () => {
+  const mockFetch = spy((_url: string, opts: any) => {
+    assertEquals(opts.method, 'DELETE')
+    return jsonResponse({ removed: 'es/hi' })
+  })
+  globalThis.fetch = mockFetch as unknown as typeof fetch
+
+  const client = new TemplatesHubClient({ baseUrl: 'http://svc.internal:1234' })
+  assertEquals(await client.removeMessage('es', 'hi'), { removed: 'es/hi' })
+
+  const [url] = mockFetch.calls[0].args as [string, any]
+  assertEquals(url, 'http://svc.internal:1234/templates/messages/es/hi')
+})
+
+Deno.test('TemplatesHubClient.resetMessage POSTs /templates/messages/:lang/:key/reset', async () => {
+  const mockFetch = spy((_url: string, opts: any) => {
+    assertEquals(opts.method, 'POST')
+    return jsonResponse({ lang: 'es', key: 'hi', text: 'hola' })
+  })
+  globalThis.fetch = mockFetch as unknown as typeof fetch
+
+  const client = new TemplatesHubClient({ baseUrl: 'http://svc.internal:1234' })
+  await client.resetMessage('es', 'hi')
+
+  const [url] = mockFetch.calls[0].args as [string, any]
+  assertEquals(url, 'http://svc.internal:1234/templates/messages/es/hi/reset')
+})
+
+Deno.test('TemplatesHubClient.previewTemplate POSTs data/lang to /templates/:channel/:name/preview', async () => {
+  const mockFetch = spy((_url: string, opts: any) => {
+    assertEquals(opts.method, 'POST')
+    assertEquals(JSON.parse(opts.body), { data: { name: 'Ana' }, lang: 'es' })
+    return jsonResponse({ body: 'Hola Ana', subject: 'Hola' })
+  })
+  globalThis.fetch = mockFetch as unknown as typeof fetch
+
+  const client = new TemplatesHubClient({ baseUrl: 'http://svc.internal:1234' })
+  const result = await client.previewTemplate('email', 'a/b', { data: { name: 'Ana' }, lang: 'es' })
+
+  assertEquals(result, { body: 'Hola Ana', subject: 'Hola' })
+  const [url] = mockFetch.calls[0].args as [string, any]
+  assertEquals(url, 'http://svc.internal:1234/templates/email/a%2Fb/preview')
+})

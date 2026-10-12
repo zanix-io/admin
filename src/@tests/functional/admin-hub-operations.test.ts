@@ -171,6 +171,34 @@ Deno.test(
 )
 
 Deno.test(
+  'admin-hub: listMessages and setMessage forward to TemplatesAdminService',
+  async () => {
+    const listStub = stub(
+      TemplatesAdminService.prototype,
+      'listMessages',
+      (langs?: string[]) => Promise.resolve({ es: { langs: String(langs) } }),
+    )
+    const setStub = stub(
+      TemplatesAdminService.prototype,
+      'setMessage',
+      (...args: unknown[]) => Promise.resolve({ args } as never),
+    )
+    try {
+      const list = getOperation('listMessages')
+      assertEquals(await list.handler({ langs: ['es'] }, list.ctx), { es: { langs: 'es' } })
+      const set = getOperation('setMessage')
+      assertEquals(
+        await set.handler({ lang: 'es', key: 'hi', text: 'hola' }, set.ctx),
+        { args: ['es', 'hi', 'hola', 'zanix-operation'] },
+      )
+    } finally {
+      listStub.restore()
+      setStub.restore()
+    }
+  },
+)
+
+Deno.test(
   'admin-hub-templates app: listTemplates forwards to TemplatesAdminService.list()',
   async () => {
     const listStub = stub(
@@ -305,6 +333,9 @@ Deno.test('admin-hub sub-apps: mutating operations never carry `mcp` — only li
       'updateTrigger',
       'removeTrigger',
       'createTemplate',
+      'setMessage',
+      'removeMessage',
+      'resetMessage',
       'pushDlqEntry',
       'requeueDlqEntry',
       'discardDlqEntry',
@@ -323,6 +354,9 @@ Deno.test('admin-hub sub-apps: mutating operations never carry `mcp` — only li
       'getTrigger',
       'listTemplates',
       'getTemplate',
+      'listMessages',
+      'listMessageEntries',
+      'previewTemplate',
       'listDlqEntries',
       'getDlqEntry',
     ]

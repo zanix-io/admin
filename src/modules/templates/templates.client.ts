@@ -1,13 +1,25 @@
 import type {
   CreateTemplateInput,
+  MessageEntry,
   Notifiers,
   SyncCodeTemplatesResult,
+  TemplatePreview,
   UpdateTemplateInput,
   ZanixTemplateAttrs,
+  ZanixTemplateMessageAttrs,
 } from '@zanix/notifications/templates-types'
 
 import { ADMIN_PROTOCOL_HEADER, RestClient } from '@zanix/server'
 import { ADMIN_PROTOCOL_VERSION } from 'utils/constants.ts'
+
+/** Builds the `?langs=&q=` query of the message routes, omitting empty values (values are escaped). */
+const messagesQuery = (params: { langs?: string[]; q?: string }): string => {
+  const query = new URLSearchParams()
+  if (params.langs?.length) query.set('langs', params.langs.join(','))
+  if (params.q) query.set('q', params.q)
+  const text = query.toString()
+  return text ? `?${text}` : ''
+}
 
 /**
  * Thin HTTP client for a business service's own `/admin/templates` API (see `@zanix/core`'s
@@ -110,5 +122,66 @@ export class TemplatesAdminClient extends RestClient {
     return this.http.post<SyncCodeTemplatesResult>('/admin/templates/sync', {
       body: JSON.stringify({ serviceId }),
     })
+  }
+
+  /**
+   * Reads the message catalog (`{{t 'key'}}` texts) as `{ [lang]: { [key]: text } }`, narrowed to
+   * `langs` when given.
+   */
+  public listMessages(langs?: string[]): Promise<Record<string, Record<string, string>>> {
+    return this.http.get<Record<string, Record<string, string>>>(
+      `/admin/templates/messages${messagesQuery({ langs })}`,
+    )
+  }
+
+  /**
+   * Lists the catalog texts with their source, default and edit state — what a screen that edits
+   * the catalog shows. `search` filters by key/text on the target side.
+   */
+  public async listMessageEntries(
+    options: { langs?: string[]; search?: string } = {},
+  ): Promise<MessageEntry[]> {
+    const { entries } = await this.http.get<{ entries: MessageEntry[] }>(
+      `/admin/templates/message-entries${
+        messagesQuery({ langs: options.langs, q: options.search })
+      }`,
+    )
+    return entries
+  }
+
+  /** Sets the text of a catalog `key` in `lang`. */
+  public setMessage(lang: string, key: string, text: string): Promise<ZanixTemplateMessageAttrs> {
+    return this.http.put<ZanixTemplateMessageAttrs>(
+      `/admin/templates/messages/${encodeURIComponent(lang)}/${encodeURIComponent(key)}`,
+      { body: JSON.stringify({ text }) },
+    )
+  }
+
+  /** Removes the text of a catalog `key` in `lang`. */
+  public removeMessage(lang: string, key: string): Promise<{ removed: string }> {
+    return this.http.delete<{ removed: string }>(
+      `/admin/templates/messages/${encodeURIComponent(lang)}/${encodeURIComponent(key)}`,
+    )
+  }
+
+  /** Puts a code-defined catalog text back to its default (rejected for a database-only text). */
+  public resetMessage(lang: string, key: string): Promise<ZanixTemplateMessageAttrs> {
+    return this.http.post<ZanixTemplateMessageAttrs>(
+      `/admin/templates/messages/${encodeURIComponent(lang)}/${encodeURIComponent(key)}/reset`,
+    )
+  }
+
+  /**
+   * Renders a template with `data` in `lang` exactly as a send would, without sending anything.
+   */
+  public previewTemplate(
+    channel: Notifiers,
+    name: string,
+    options: { data?: Record<string, unknown>; lang?: string } = {},
+  ): Promise<TemplatePreview> {
+    return this.http.post<TemplatePreview>(
+      `/admin/templates/${channel}/${encodeURIComponent(name)}/preview`,
+      { body: JSON.stringify(options) },
+    )
   }
 }

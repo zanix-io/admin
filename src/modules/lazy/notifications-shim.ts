@@ -24,10 +24,13 @@
 
 import type {
   CreateTemplateInput,
+  MessageEntry,
   SyncCodeTemplateEntry,
   SyncCodeTemplatesResult,
+  TemplatePreview,
   UpdateTemplateInput,
   ZanixTemplateAttrs,
+  ZanixTemplateMessageAttrs,
 } from '@zanix/notifications/templates-types'
 
 import { NOTIFICATIONS_SPECIFIER } from './specifiers.ts'
@@ -37,8 +40,7 @@ import { NOTIFICATIONS_SPECIFIER } from './specifiers.ts'
 export type NotifiersLike = 'email' | 'sms' | 'whatsapp'
 
 /**
- * Local, narrow shape of `@zanix/notifications`'s own `TemplatesAdminService` — only the five
- * methods `templates-operations.ts` calls through `resolveTarget`.
+ * Local, narrow shape of `@zanix/notifications`'s own `TemplatesAdminService` — only the methods `templates-operations.ts` calls through `resolveTarget`.
  */
 export interface TemplatesAdminServiceLike {
   list(): Promise<ZanixTemplateAttrs[]>
@@ -51,6 +53,22 @@ export interface TemplatesAdminServiceLike {
     updatedBy: string,
   ): Promise<ZanixTemplateAttrs>
   remove(channel: NotifiersLike, name: string, updatedBy: string): Promise<void>
+  listMessages(langs?: string[]): Promise<Record<string, Record<string, string>>>
+  listMessageEntries(options?: { langs?: string[]; search?: string }): Promise<MessageEntry[]>
+  setMessage(
+    lang: string,
+    key: string,
+    text: string,
+    updatedBy: string,
+  ): Promise<ZanixTemplateMessageAttrs>
+  removeMessage(lang: string, key: string): Promise<void>
+  resetMessage(lang: string, key: string, updatedBy: string): Promise<ZanixTemplateMessageAttrs>
+  preview(
+    channel: NotifiersLike,
+    name: string,
+    data: Record<string, unknown>,
+    lang?: string,
+  ): Promise<TemplatePreview>
 }
 
 /**

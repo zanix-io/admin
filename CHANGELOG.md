@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/) and this project
 adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-10-12
+
+### Added
+
+- **Message catalog and template preview** on `TemplatesAdminClient` and `TemplatesHubClient`:
+  `listMessages(langs?)`, `listMessageEntries({ langs?, search? })`, `setMessage(lang, key, text)`,
+  `removeMessage(lang, key)`, `resetMessage(lang, key)` and
+  `previewTemplate(channel, name, { data?,
+  lang? })`, over the routes `@zanix/notifications` 1.3
+  exposes. The templates sub-apps gain the matching operations (`listMessages`,
+  `listMessageEntries`, `previewTemplate` read-only with `mcp`; `setMessage`, `removeMessage`,
+  `resetMessage` mutating, without).
+
+### Changed
+
+- `@zanix/notifications` minimum raised to `^1.3.0` (message catalog types and routes).
+
 ## [2.3.2] - 2026-09-07
 
 ### Fixed
