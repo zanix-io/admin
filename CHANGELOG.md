@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/) and this project
 adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-10-12
+
+### Added
+
+- **`previewTemplate` renders with draft message texts.** `TemplatesAdminClient.previewTemplate()`
+  and `TemplatesHubClient.previewTemplate()` take `texts?: Record<string, string>` in their options
+  next to `data` and `lang`, sent in the request body, and the `previewTemplate` operation (still
+  read-only and `mcp`-exposed) accepts, validates as an object of strings, and forwards it. The
+  texts replace the catalog's for that render only; nothing is saved. The target service needs
+  `@zanix/notifications` 1.5.0 or later to apply them.
+
+### Changed
+
+- **`@zanix/notifications` is now `^1.5.0`** (was `^1.3.0`). The `texts` of `previewTemplate` (draft
+  message texts) only take effect where the templates controller comes from `@zanix/notifications`
+  1.5.0 or later; an older one ignores the field and renders the saved texts. With the floor raised,
+  a hub built on this version always has it.
+
 ## [2.4.1] - 2026-10-12
 
 ### Changed

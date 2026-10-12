@@ -24,6 +24,20 @@ import { resolveTemplatesAdminService } from '../lazy/notifications-shim.ts'
 const OPERATION_UPDATED_BY = 'zanix-operation'
 
 /**
+ * Rejects draft preview texts that are not a plain object of strings; the bounds (key count and
+ * lengths) are enforced by `TemplatesAdminService.preview()` itself.
+ */
+function assertDraftTexts(texts: unknown): void {
+  if (texts === undefined) return
+  if (
+    texts === null || typeof texts !== 'object' || Array.isArray(texts) ||
+    Object.values(texts).some((text) => typeof text !== 'string')
+  ) {
+    throw new TypeError('previewTemplate: "texts" must be an object of strings.')
+  }
+}
+
+/**
  * Templates `operations` for one Zanix App, scoped to `appName` — reused as-is by BOTH
  * `defineAdminHubApp` and `defineLocalAdminApp`: unlike Triggers (a proxy on the hub side, real
  * persisted data on the local side — genuinely different business logic per side), Templates is
@@ -167,22 +181,26 @@ export function buildTemplatesOperations(
     },
     previewTemplate: {
       handler: async (payload): Promise<TemplatePreview> => {
-        const { channel, name, data, lang } = payload as {
+        const { channel, name, data, lang, texts } = payload as {
           channel: NotifiersLike
           name: string
           data?: Record<string, unknown>
           lang?: string
+          texts?: Record<string, string>
         }
+        assertDraftTexts(texts)
         const TemplatesAdminService = await resolveTemplatesAdminService()
         return resolveTarget(appName, TemplatesAdminService).preview(
           channel,
           name,
           data ?? {},
           lang,
+          texts,
         )
       },
       mcp: {
-        description: 'Renders a template with the given data and language, without sending it.',
+        description:
+          "Renders a template with the given data and language, without sending it. `texts` (key to text) are draft message texts that replace the catalog's for this render only.",
         inputSchema: {
           type: 'object',
           required: ['channel', 'name'],
@@ -191,6 +209,7 @@ export function buildTemplatesOperations(
             name: { type: 'string' },
             data: { type: 'object' },
             lang: { type: 'string' },
+            texts: { type: 'object', additionalProperties: { type: 'string' } },
           },
         },
       },

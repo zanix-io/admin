@@ -279,3 +279,21 @@ Deno.test('TemplatesAdminClient.previewTemplate POSTs data/lang to /admin/templa
   const [url] = mockFetch.calls[0].args as [string, any]
   assertEquals(url, 'http://svc.internal:1234/admin/templates/email/a%2Fb/preview')
 })
+
+Deno.test('TemplatesAdminClient.previewTemplate sends the draft texts in the body', async () => {
+  const mockFetch = spy((_url: string, opts: any) => {
+    assertEquals(JSON.parse(opts.body), { lang: 'es', texts: { 'welcome.title': 'Borrador' } })
+    return jsonResponse({ body: 'Borrador' })
+  })
+  globalThis.fetch = mockFetch as unknown as typeof fetch
+
+  const client = new TemplatesAdminClient({ baseUrl: 'http://svc.internal:1234' })
+  const result = await client.previewTemplate('email', 'welcome', {
+    lang: 'es',
+    texts: { 'welcome.title': 'Borrador' },
+  })
+
+  assertEquals(result, { body: 'Borrador' })
+  const [url] = mockFetch.calls[0].args as [string, any]
+  assertEquals(url, 'http://svc.internal:1234/admin/templates/email/welcome/preview')
+})

@@ -179,11 +179,17 @@ export class TemplatesHubClient extends RestClient {
 
   /**
    * Renders a template with `data` in `lang` exactly as a send would, without sending anything.
+   * `texts` are draft message texts (key to text) that replace the catalog's text for that key in
+   * the language of this render only, so a text can be seen before it is saved.
    */
   public previewTemplate(
     channel: Notifiers,
     name: string,
-    options: { data?: Record<string, unknown>; lang?: string } = {},
+    options: {
+      data?: Record<string, unknown>
+      lang?: string
+      texts?: Record<string, string>
+    } = {},
   ): Promise<TemplatePreview> {
     return this.http.post<TemplatePreview>(
       `/templates/${channel}/${encodeURIComponent(name)}/preview`,

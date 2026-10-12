@@ -1,4 +1,4 @@
-import { assert, assertEquals } from '@std/assert'
+import { assert, assertEquals, assertRejects } from '@std/assert'
 import { stub } from '@std/testing/mock'
 import { activateApps, getLocalOperation } from '@zanix/app/runtime'
 import { TemplatesAdminService } from '@zanix/notifications/templates-api'
@@ -194,6 +194,38 @@ Deno.test(
     } finally {
       listStub.restore()
       setStub.restore()
+    }
+  },
+)
+
+Deno.test(
+  'admin-hub: previewTemplate forwards the draft texts to TemplatesAdminService.preview()',
+  async () => {
+    const previewStub = stub(
+      TemplatesAdminService.prototype,
+      'preview',
+      (...args: unknown[]) => Promise.resolve({ body: JSON.stringify(args) }),
+    )
+    try {
+      const { handler, ctx } = getOperation('previewTemplate')
+      assertEquals(
+        await handler(
+          { channel: 'email', name: 'welcome', lang: 'es', texts: { 'welcome.title': 'Hola' } },
+          ctx,
+        ),
+        { body: JSON.stringify(['email', 'welcome', {}, 'es', { 'welcome.title': 'Hola' }]) },
+      )
+      await assertRejects(
+        () => handler({ channel: 'email', name: 'welcome', texts: { a: 1 } }, ctx),
+        TypeError,
+      )
+      await assertRejects(
+        () => handler({ channel: 'email', name: 'welcome', texts: ['a'] }, ctx),
+        TypeError,
+      )
+      assertEquals(previewStub.calls.length, 1)
+    } finally {
+      previewStub.restore()
     }
   },
 )

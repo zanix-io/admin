@@ -68,6 +68,7 @@ export interface TemplatesAdminServiceLike {
     name: string,
     data: Record<string, unknown>,
     lang?: string,
+    texts?: Record<string, string>,
   ): Promise<TemplatePreview>
 }
 

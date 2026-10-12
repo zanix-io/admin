@@ -129,12 +129,18 @@ await client.removeMessage('es', 'welcome.title')
 const { body, subject } = await client.previewTemplate('email', 'welcome', {
   data: { name: 'Ana' },
   lang: 'es',
+  texts: { 'welcome.title': 'Hola, {name}' }, // optional draft texts for this render only
 })
 ```
 
+`texts` (key to text) replaces the catalog's text for that key in the language of that render
+(`lang`, or the default language), so an operator sees an edit before saving it; nothing is stored.
+The request body is `{ data?, lang?, texts? }`; `@zanix/notifications` rejects, with `400`, more
+than 200 keys, a key over 200 characters or a text over 20000.
+
 The same operations exist as `operations` of the templates sub-apps: `listMessages`,
-`listMessageEntries`, `previewTemplate` (read-only, also `mcp`), and `setMessage`, `removeMessage`,
-`resetMessage` (mutating, no `mcp`).
+`listMessageEntries`, `previewTemplate` (read-only, also `mcp`; it takes `texts` too), and
+`setMessage`, `removeMessage`, `resetMessage` (mutating, no `mcp`).
 
 ---
 
